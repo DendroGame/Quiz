@@ -1,0 +1,28 @@
+[
+  {
+    "id": 1,
+    "common": "white oak",
+    "scientific": "Quercus alba",
+    "family": "Fagaceae",
+    "form": "tree",
+    "leaf": "deciduous",
+    "zones": "3–9",
+    "range": "Eastern North America",
+    "invasive": false,
+    "pron": "KWER-kus AL-buh",
+    "vtId": 67
+  },
+  {
+    "id": 2,
+    "common": "sugar maple",
+    "scientific": "Acer saccharum",
+    "family": "Sapindaceae",
+    "form": "tree",
+    "leaf": "deciduous",
+    "zones": "3–8",
+    "range": "Eastern North America",
+    "invasive": false,
+    "pron": "AY-ser SAK-uh-rum",
+    "vtId": 2
+  }
+]
