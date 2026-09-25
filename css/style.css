@@ -1,0 +1,424 @@
+/* ==========================================================================
+   DENDROLOGY MASTER QUIZ STYLES (css/style.css)
+   ========================================================================== */
+
+:root {
+  --bg: #0b1510;
+  --card-bg: #14241c;
+  --panel-bg: #1a2f25;
+  --accent: #3d8b6e;
+  --accent-hover: #4ea885;
+  --accent-light: #a8e0c4;
+  --text: #e8f5ee;
+  --muted: #8aa899;
+  --danger: #e53e3e;
+  --warning: #dd6b20;
+  --option-pad-y: 12px;
+  --option-pad-x: 14px;
+  --radius: 12px;
+  --img-h: 220px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px 32px;
+  overflow-x: hidden;
+}
+
+/* --- HEADER & NAVBAR --- */
+.app-header {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px 16px;
+}
+
+.app-header h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent-light);
+}
+
+.header-stats {
+  display: flex;
+  gap: 12px;
+  background: var(--panel-bg);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  border: 1px solid rgba(61, 139, 110, 0.4);
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+/* --- MAIN CONTAINER CARD --- */
+.main-card {
+  width: 100%;
+  max-width: 600px;
+  background: var(--card-bg);
+  border: 1px solid rgba(61, 139, 110, 0.3);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 4px;
+  margin-bottom: 16px;
+}
+
+/* --- FORM CONTROLS & BUTTONS --- */
+.panel-section {
+  margin-bottom: 16px;
+}
+
+.section-label {
+  display: block;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-light);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mode-btn, .count-btn, .choice-btn {
+  flex: 1 1 calc(33.333% - 6px);
+  min-width: 80px;
+  background: var(--panel-bg);
+  border: 1px solid rgba(61, 139, 110, 0.35);
+  color: var(--text);
+  padding: 10px 8px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mode-btn.active, .count-btn.active, .choice-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent-light);
+  font-weight: 600;
+}
+
+.preset-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.preset-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.btn-primary {
+  width: 100%;
+  background: linear-gradient(135deg, var(--accent), #2b614d);
+  color: #fff;
+  border: 1px solid var(--accent-light);
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity 0.2s;
+}
+
+.btn-primary:hover {
+  opacity: 0.95;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+/* --- QUIZ SCREEN COMPONENTS --- */
+.progress-wrap {
+  margin-bottom: 14px;
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.progress-bar-bg, .timer-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.timer-fill {
+  height: 100%;
+  background: var(--warning);
+  transition: width 1s linear;
+}
+
+/* Prompt Header */
+.prompt-box {
+  text-align: center;
+  margin: 12px 0;
+}
+
+.prompt-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(61, 139, 110, 0.25);
+  color: var(--accent-light);
+  padding: 4px 10px;
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+
+.prompt-name {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Media Box & Dynamic Resize */
+.media-box {
+  width: 100%;
+  height: var(--img-h);
+  background: #000;
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(61, 139, 110, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+
+.stage {
+  flex: 1;
+  width: 100%;
+  height: calc(100% - 16px);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.specimen-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.specimen-img.revealed {
+  opacity: 1;
+}
+
+.fallback-note {
+  position: absolute;
+  font-size: 0.8rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.drag-handle {
+  height: 16px;
+  background: #101c15;
+  color: var(--muted);
+  text-align: center;
+  line-height: 14px;
+  font-size: 1rem;
+  cursor: ns-resize;
+  user-select: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Options Grid */
+.options-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.option {
+  width: 100%;
+  background: var(--panel-bg);
+  border: 2px solid rgba(61, 139, 110, 0.3);
+  color: var(--text);
+  padding: var(--option-pad-y) var(--option-pad-x);
+  font-size: 0.95rem;
+  text-align: left;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.option:hover:not([disabled]) {
+  background: rgba(61, 139, 110, 0.25);
+  border-color: var(--accent);
+}
+
+.option.kb-focus {
+  border-color: #fff;
+  outline: 2px solid var(--accent-light);
+}
+
+.option.correct {
+  background: #1c452e !important;
+  border-color: #48bb78 !important;
+  color: #fff;
+  font-weight: 600;
+}
+
+.option.wrong {
+  background: #4a1d24 !important;
+  border-color: var(--danger) !important;
+  color: #fff;
+}
+
+/* Typing Mode Area */
+.typing-container {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.typing-container input[type="text"] {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #0f1c15;
+  border: 2px solid rgba(61, 139, 110, 0.4);
+  color: #fff;
+  font-size: 1rem;
+  outline: none;
+}
+
+.typing-container input[type="text"]:focus {
+  border-color: var(--accent-light);
+}
+
+/* Feedback Banner */
+.feedback-banner {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.feedback-banner.correct {
+  background: rgba(72, 187, 120, 0.15);
+  color: #68d391;
+  border: 1px solid #48bb78;
+}
+
+.feedback-banner.wrong {
+  background: rgba(229, 62, 62, 0.15);
+  color: #fc8181;
+  border: 1px solid var(--danger);
+}
+
+/* Settings Modal */
+.modal-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+}
+
+.modal-box {
+  width: 100%;
+  max-width: 450px;
+  background: var(--card-bg);
+  border: 1px solid rgba(61, 139, 110, 0.5);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* Utility */
+.hidden {
+  display: none !important;
+}
