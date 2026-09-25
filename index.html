@@ -2,85 +2,180 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dendrology Master Quiz</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1a14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Dendrology Quiz">
+  <meta name="application-name" content="Dendrology Quiz">
+  <meta name="description" content="Virginia Tech Dendrology Master Species & 3D Bud Scan Quiz">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B3%3C/text%3E%3C/svg%3E">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B3%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lobster&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <title>🌲 VT Dendrology Master Quiz</title>
 </head>
 <body>
+  <canvas id="confettiCanvas"></canvas>
 
-  <div class="app-container">
-    
-    <!-- LEFT COLUMN: Persistent Settings & Setup Side Panel -->
-    <aside class="side-panel">
-      <h1>🌲 DendroMaster</h1>
-      <p class="subtitle">1,250+ Species Widescreen Edition</p>
+  <h1>🌲 Dendrology Quiz</h1>
+  <p class="subtitle" id="appVersion">VT Master Edition · 1,100+ Species & 3D Bud Viewer</p>
 
-      <!-- Quiz Direction Mode -->
-      <div class="panel-section">
-        <label class="section-label">Quiz Direction</label>
-        <div id="modeSelect" class="btn-group">
-          <button type="button" class="mode-btn active" data-mode="sci-to-common">Scientific → Common</button>
-          <button type="button" class="mode-btn" data-mode="common-to-sci">Common → Scientific</button>
-          <button type="button" class="mode-btn" data-mode="family">Family Lookup</button>
+  <!-- ========== SETTINGS MODAL ========== -->
+  <div class="settings-panel hidden" id="settingsPanel">
+    <div class="settings-inner">
+      <div class="settings-header">
+        <div class="settings-title">Quiz Settings</div>
+        <button type="button" id="closeSettingsBtn" class="big-btn" style="margin:0;padding:8px 16px;width:auto;">Done</button>
+      </div>
+
+      <div class="set-row">
+        <span class="label">Mode <span style="font-weight:400;color:var(--muted);font-size:0.75rem;">(pick one or more)</span></span>
+        <div class="mode-select" id="modeSelect">
+          <button type="button" class="mode-btn active" data-mode="sci-to-common">Sci → Common</button>
+          <button type="button" class="mode-btn" data-mode="common-to-sci">Common → Sci</button>
+          <button type="button" class="mode-btn" data-mode="family">Family names</button>
+        </div>
+
+        <span class="label" style="margin-top:12px;display:block;">Answer Input <span style="font-weight:400;color:var(--muted);font-size:0.75rem;">(pick one or both)</span></span>
+        <div class="mode-select" id="playStyleSelect">
+          <button type="button" class="mode-btn active" id="playStyleQuiz" data-style="quiz">Multiple Choice</button>
+          <button type="button" class="mode-btn" id="playStyleTyping" data-style="typing">Typing</button>
         </div>
       </div>
 
-      <!-- Question Count -->
-      <div class="panel-section">
-        <label class="section-label">Question Count</label>
-        <div id="countSelect" class="btn-group">
-          <button type="button" class="count-btn active" data-count="10">10 Questions</button>
-          <button type="button" class="count-btn" data-count="25">25 Questions</button>
-          <button type="button" class="count-btn" data-count="50">50 Questions</button>
+      <div class="set-row" id="countSelectRow">
+        <span class="label">Number of questions</span>
+        <div class="time-select" id="countSelect">
+          <button class="count-btn" data-count="5">5</button>
+          <button class="count-btn active" data-count="10">10</button>
+          <button class="count-btn" data-count="20">20</button>
+          <button class="count-btn" data-count="50">50</button>
+          <button class="count-btn" data-count="100">100</button>
         </div>
       </div>
 
-      <!-- Database Scope -->
-      <div class="panel-section">
-        <label class="section-label">Species Scope</label>
-        <button type="button" class="mode-btn active" style="width:100%; text-align:center; pointer-events:none;">All 1,250+ Species Pool</button>
+      <div class="set-row" id="choicesRow">
+        <span class="label">Answer choices per question</span>
+        <div class="time-select" id="choicesSelect">
+          <button class="choice-btn" data-choices="2">2</button>
+          <button class="choice-btn" data-choices="3">3</button>
+          <button class="choice-btn active" data-choices="4">4</button>
+          <button class="choice-btn" data-choices="5">5</button>
+          <button class="choice-btn" data-choices="6">6</button>
+        </div>
       </div>
 
-      <button type="button" id="startBtn" class="btn-primary" onclick="startQuiz()">Launch Quiz</button>
-    </aside>
+      <div class="set-row" id="rowTimeLimit">
+        <div style="display:flex;justify-content:space-between;">
+          <span class="label">Time per question</span>
+          <span id="timeLimitLabel" style="color:#a8e0c4;font-weight:600;">15s</span>
+        </div>
+        <input type="range" id="timeLimitSlider" min="5" max="60" value="15" step="5" style="width:100%;accent-color:#3d8b6e;" />
+      </div>
 
-    <!-- RIGHT COLUMN: Main Quiz & Display Stage -->
-    <main class="main-stage">
+      <div class="set-row" id="familySection" style="margin-top:8px;">
+        <span class="label" style="font-size:0.95rem;color:#a8e0c4;">Taxonomic Family Filter</span>
+        <p id="familySummary" style="font-size:0.8rem;color:#a8e0c4;margin:6px 0 0;">All Virginia Tech Species</p>
+        <div style="display:flex;gap:8px;margin:8px 0;">
+          <button type="button" id="familyAllBtn" class="family-all-btn" style="flex:1;">Clear filter (= all species)</button>
+        </div>
+        <div id="familyCheckList" class="family-check-list">
+          <span style="color:#8aa899;font-size:0.85rem;">Loading Virginia Tech families…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== IN-QUIZ HUD BAR ========== -->
+  <div class="stats hidden" id="stats">
+    <button type="button" id="cancelQuizBtn" class="settings-gear-sm" title="Cancel quiz">✕ Cancel</button>
+    <div>Score: <strong id="score">0</strong></div>
+    <div>Q: <strong id="qNum">0</strong>/<span id="totalQ">10</span></div>
+    <div>Streak: <strong id="streak">0</strong></div>
+    <button type="button" id="settingsBtnQuiz" class="settings-gear-sm" title="Settings">⚙️</button>
+  </div>
+
+  <!-- ========== START / HOME SCREEN ========== -->
+  <div class="card" id="startScreen">
+    <div class="start-screen">
+      <div class="home-toolbar">
+        <button type="button" id="settingsBtn" class="settings-gear" title="Settings">⚙️ Settings</button>
+      </div>
+      <p>Master North American dendrology with verified diagnostic specimens and 360-degree rotational bud turntable scans from Virginia Tech.</p>
       
-      <!-- START SCREEN -->
-      <section id="startScreen">
-        <h2>Desktop Workspace Ready</h2>
-        <p class="subtitle" style="margin-top:8px;">Select your preferences on the left sidebar and click <strong>Launch Quiz</strong> to begin testing across the master dataset.</p>
-      </section>
+      <div style="margin:16px 0 12px;text-align:left;">
+        <label for="playerName" style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:6px;">Player Name</label>
+        <input type="text" id="playerName" maxlength="24" placeholder="Enter name…" autocomplete="nickname"
+          style="width:100%;padding:12px 14px;border-radius:10px;border:2px solid rgba(61,139,110,0.35);background:var(--option-bg);color:var(--text);font-size:1rem;outline:none;" />
+      </div>
 
-      <!-- ACTIVE QUIZ SCREEN -->
-      <section id="quizScreen" class="hidden">
-        <div style="display:flex; justify-content:space-between; margin-bottom:16px; font-size:0.85rem; color:var(--muted);">
-          <span>Question <strong id="qNum">1</strong> / <strong id="totalQ">10</strong></span>
-          <span>Score: <strong id="score">0</strong></span>
+      <button type="button" class="big-btn" id="startBtn">Start 10-Question Quiz</button>
+      <button type="button" id="ultimateBtn" style="display:block;width:100%;margin-top:10px;padding:12px;background:linear-gradient(135deg,#3d8b6e,#2a5a48);border:2px solid #a8e0c4;color:#fff;border-radius:12px;font-size:0.95rem;font-weight:600;cursor:pointer;">
+        🌟 Master Pool Run
+      </button>
+      <p class="credit" style="margin-top:14px;">Diagnostic data & 360° scans courtesy of Virginia Tech Department of Forest Resources & Environmental Conservation.</p>
+    </div>
+  </div>
+
+  <!-- ========== QUIZ WORKSPACE ========== -->
+  <div class="card hidden" id="quizScreen">
+    <div class="progress"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+
+    <div class="timer-row">
+      <span class="timer-label">Time left</span>
+      <div class="timer-bar-wrap"><div class="timer-bar" id="timerBar"></div></div>
+      <span class="timer-text" id="timerText">15</span>
+    </div>
+
+    <!-- Draggable Media Box & 3D Stage -->
+    <div class="image-wrap" id="imageWrap">
+      <div class="image-slot" id="imageSlot">
+        <span class="image-placeholder" id="imgPlaceholder">🌿</span>
+        <span class="image-loading hidden" id="imgLoading">Loading specimen…</span>
+        <img id="speciesImg" alt="Species photo" />
+        <div id="turntableContainer" class="hidden turntable-container">
+          <canvas id="turntableCanvas"></canvas>
+          <div class="turntable-hint">↔ Drag horizontally to rotate bud scan 360°</div>
         </div>
+      </div>
+      <div class="img-resize-handle" id="imgResizeHandle" title="Drag up or down to resize">⋯</div>
+    </div>
+    <p id="imgCredit"></p>
 
-        <div class="quiz-grid">
-          <!-- Left Side of Quiz: Specimen Image -->
-          <div class="media-box">
-            <span style="color:var(--muted); font-size:0.85rem;" id="imgPlaceholder">Specimen Photo Loading...</span>
-            <img id="speciesImg" style="width:100%; height:100%; object-fit:cover; display:none;" alt="Species Photo">
-          </div>
+    <!-- 3D Bud Scan Action Button -->
+    <button type="button" id="spinzamBtn" class="hint-btn hidden" style="border-color:#68d391;color:#68d391;font-weight:600;margin-bottom:8px;">
+      🔄 Rotate 3D Bud Scan (360° View)
+    </button>
+    <button class="hint-btn" id="hintBtn">👁 Reveal specimen photo</button>
 
-          <!-- Right Side of Quiz: Prompt & Options -->
-          <div>
-            <div id="promptLabel" style="font-size:0.75rem; text-transform:uppercase; color:var(--accent-light); margin-bottom:4px; font-weight:600;">Scientific name</div>
-            <div id="prompt" style="font-size: 1.25rem; font-weight: 700; margin-bottom: 16px;">—</div>
-            <div id="options" class="options-grid"></div>
-            <div id="feedback" class="hidden" style="margin-top: 12px; padding: 10px; border-radius: 8px; font-weight: 600;"></div>
-            <button type="button" id="nextBtn" class="btn-primary hidden" onclick="nextQuestion()" style="margin-top: 16px;">Next Question →</button>
-          </div>
-        </div>
-      </section>
+    <div class="prompt-label" id="promptLabel">Scientific Name</div>
+    <div class="prompt" id="prompt"></div>
 
-    </main>
+    <!-- Multiple Choice Grid -->
+    <div class="options" id="options"></div>
 
+    <!-- Typing Mode Input -->
+    <div id="typeAnswerArea" class="type-answer-area hidden">
+      <input type="text" id="typeAnswerInput" class="type-answer-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type name here…" />
+      <button type="button" id="typeSubmitBtn" class="big-btn" style="margin-top:8px;padding:10px;">Submit Answer</button>
+    </div>
+
+    <div class="feedback hidden" id="feedback"></div>
+    <button class="next-btn hidden" id="nextBtn">Next Question →</button>
+  </div>
+
+  <!-- ========== RESULTS SCREEN ========== -->
+  <div class="card hidden" id="endScreen">
+    <div class="end-screen">
+      <h2 style="margin-bottom:8px;color:#a8e0c4;">Quiz Complete!</h2>
+      <p id="endMsg"></p>
+      <button class="big-btn" id="startOverBtn" style="margin-bottom:10px;">Start Over</button>
+      <button class="big-btn" id="homeBtn" style="background:var(--option-bg);border:2px solid var(--accent);">← Back to Home</button>
+    </div>
   </div>
 
   <script src="js/app.js"></script>
