@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dendrology Master Quiz</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Stats Bar -->
+  <header id="quizHeader" class="header-bar hidden">
+    <div class="stat-pill">Score: <span id="scoreDisplay">0</span></div>
+    <div class="stat-pill">Streak: <span id="streakDisplay">0</span></div>
+    <div class="stat-pill">Question: <span id="qCurrent">1</span>/<span id="qTotal">10</span></div>
+    <button id="abortQuizBtn" class="btn-sm">Exit</button>
+  </header>
+
+  <main id="appContainer">
+    <!-- Home / Setup View -->
+    <section id="startScreen" class="view-panel">
+      <div class="brand">
+        <h1 class="game-title">Dendrology Master</h1>
+        <p class="game-subtitle">1,250 Woody Plants of North America</p>
+      </div>
+
+      <div class="user-card">
+        <label for="playerNickname">Player Nickname</label>
+        <input type="text" id="playerNickname" placeholder="Forester" maxlength="20">
+      </div>
+
+      <!-- Quick Mode Selectors -->
+      <div class="selector-group">
+        <div class="group-label">Quiz Mode</div>
+        <div id="modeToggleGroup" class="pill-grid">
+          <button class="pill active" data-mode="sci-to-common">Sci → Common</button>
+          <button class="pill" data-mode="common-to-sci">Common → Sci</button>
+          <button class="pill" data-mode="identify">Photo ID</button>
+          <button class="pill" data-mode="family">Family Quiz</button>
+          <button class="pill" data-mode="flash">Flash Cards</button>
+        </div>
+      </div>
+
+      <!-- Question Count -->
+      <div class="selector-group">
+        <div class="group-label">Round Length</div>
+        <div id="countToggleGroup" class="pill-grid">
+          <button class="pill" data-count="10">10</button>
+          <button class="pill active" data-count="25">25</button>
+          <button class="pill" data-count="50">50</button>
+          <button class="pill" data-count="100">100</button>
+          <button class="pill" data-count="all">All Available</button>
+        </div>
+      </div>
+
+      <div class="action-stack">
+        <button id="startRoundBtn" class="btn-primary">Launch Test</button>
+        <div class="btn-subrow">
+          <button id="openFilterModalBtn" class="btn-secondary">Filter Species (1,250)</button>
+          <button id="openSettingsModalBtn" class="btn-secondary">Settings</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive Quiz View -->
+    <section id="quizScreen" class="view-panel hidden">
+      <!-- Responsive Resizable Viewer Container -->
+      <div id="mediaViewer" class="media-box">
+        <div id="imageStage" class="stage">
+          <img id="activePhoto" alt="Diagnostic woody specimen" class="specimen-img hidden">
+          <div id="mediaLoader" class="loader-spinner"></div>
+          <div id="mediaFallback" class="fallback-note">Photo will reveal on submit</div>
+        </div>
+        <div id="resizeBar" class="drag-handle" title="Drag to resize photo view">···</div>
+      </div>
+
+      <!-- Prompt Section -->
+      <div class="prompt-box">
+        <span id="promptCategory" class="category-tag">Scientific Name</span>
+        <h2 id="promptQuestion" class="prompt-text">—</h2>
+        <div id="promptPronunciation" class="pronunciation-text"></div>
+      </div>
+
+      <!-- Multiple Choice Deck -->
+      <div id="choiceContainer" class="deck-grid"></div>
+
+      <!-- Typing Input (Hidden by default) -->
+      <div id="typingContainer" class="typing-deck hidden">
+        <input type="text" id="typeInput" placeholder="Type name..." autocomplete="off">
+        <button id="typeSubmitBtn" class="btn-primary">Submit</button>
+      </div>
+
+      <!-- Post-Answer Feedback -->
+      <div id="feedbackBanner" class="feedback-banner hidden"></div>
+      <button id="nextCardBtn" class="btn-primary hidden">Continue</button>
+    </section>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
