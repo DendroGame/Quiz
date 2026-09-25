@@ -198,4 +198,53 @@ h1 {
   .quiz-grid {
     grid-template-columns: 1fr;
   }
+   /* ==========================================================================
+   MOBILE VIEWPORT LOCK & ZERO-SCROLL LAYOUT
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  body.in-quiz {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  
+  body.in-quiz .card {
+    width: 100%;
+    max-height: calc(100dvh - 16px);
+    display: flex;
+    flex-direction: column;
+    padding: 12px 14px;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+  
+  body.in-quiz .image-wrap {
+    height: 130px;
+    min-height: 90px;
+    flex-shrink: 0;
+    margin-bottom: 8px;
+  }
+  
+  body.in-quiz .prompt {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    line-height: 1.25;
+  }
+  
+  body.in-quiz .options {
+    gap: 6px;
+    flex: 1 1 auto;
+  }
+  
+  body.in-quiz .option {
+    padding: 10px 12px;
+    min-height: 42px;
+    font-size: 0.9rem;
+  }
+}
 }
