@@ -120,7 +120,8 @@ h1 {
   height: 8px;
   background: rgba(255,255,255,0.08);
   border-radius: 4px;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
 }
 .timer-bar {
   height: 100%;
@@ -130,6 +131,29 @@ h1 {
   transition: width 0.2s linear;
 }
 .timer-text { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.05rem; }
+
+/* Restored Timer Marker for "Picture appears at" */
+.timer-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #c9a227;
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: 2;
+  transition: left 0.2s ease;
+}
+.timer-marker::after {
+  content: attr(data-label);
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  color: #c9a227;
+  white-space: nowrap;
+}
 
 /* Dynamic Image Container & Resizer */
 .image-wrap {
@@ -165,6 +189,16 @@ h1 {
 
 .image-wrap img.revealed { opacity: 1 !important; }
 .image-placeholder { font-size: 3rem; opacity: 0.4; position: absolute; }
+.image-soon {
+  position: absolute;
+  bottom: 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: rgba(0,0,0,0.5);
+  padding: 4px 10px;
+  border-radius: 8px;
+  pointer-events: none;
+}
 .image-loading { position: absolute; font-size: 0.85rem; color: var(--muted); }
 
 .img-resize-handle {
