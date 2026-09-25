@@ -16,13 +16,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lobster&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <title>🌲 VT Dendrology Master Quiz</title>
+  <title>🌲 VT Dendrology Master Quiz v1.0.5</title>
 </head>
 <body>
   <canvas id="confettiCanvas"></canvas>
 
   <h1>🌲 Dendrology Quiz</h1>
-  <p class="subtitle" id="appVersion">VT Master Edition · 1,100+ Species & 3D Bud Viewer</p>
+  <p class="subtitle" id="appVersion">v1.0.5 · VT Master Dataset & 3D Bud Viewer</p>
 
   <!-- ========== SETTINGS MODAL ========== -->
   <div class="settings-panel hidden" id="settingsPanel">
@@ -75,6 +75,23 @@
           <span id="timeLimitLabel" style="color:#a8e0c4;font-weight:600;">15s</span>
         </div>
         <input type="range" id="timeLimitSlider" min="5" max="60" value="15" step="5" style="width:100%;accent-color:#3d8b6e;" />
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--muted);"><span>5s</span><span>60s</span></div>
+      </div>
+
+      <!-- RESTORED: PICTURE APPEARS AT SLIDER -->
+      <div class="set-row" id="picTimeSelect">
+        <div style="display:flex;justify-content:space-between;">
+          <span class="label">Picture appears at</span>
+          <span id="picTimeLabel" style="color:#a8e0c4;font-weight:600;">5s left</span>
+        </div>
+        <input type="range" id="picTimeSlider" min="1" max="60" value="5" step="1" style="width:100%;accent-color:#3d8b6e;" />
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--muted);"><span>1s</span><span>60s</span></div>
+      </div>
+
+      <div class="set-row" id="rowNoPics">
+        <label class="chk-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="noPicsToggle" style="accent-color:#3d8b6e;width:18px;height:18px;" /> No pictures
+        </label>
       </div>
 
       <div class="set-row" id="familySection" style="margin-top:8px;">
@@ -105,7 +122,7 @@
       <div class="home-toolbar">
         <button type="button" id="settingsBtn" class="settings-gear" title="Settings">⚙️ Settings</button>
       </div>
-      <p>Master North American dendrology with verified diagnostic specimens and 360-degree rotational bud turntable scans from Virginia Tech.</p>
+      <p>Test your knowledge on Virginia Tech dendrology specimens with timed diagnostic photos and interactive 360-degree bud turntable scans.</p>
       
       <div style="margin:16px 0 12px;text-align:left;">
         <label for="playerName" style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:6px;">Player Name</label>
@@ -115,7 +132,7 @@
 
       <button type="button" class="big-btn" id="startBtn">Start 10-Question Quiz</button>
       <button type="button" id="ultimateBtn" style="display:block;width:100%;margin-top:10px;padding:12px;background:linear-gradient(135deg,#3d8b6e,#2a5a48);border:2px solid #a8e0c4;color:#fff;border-radius:12px;font-size:0.95rem;font-weight:600;cursor:pointer;">
-        🌟 Master Pool Run
+        🌟 Master Pool Run (All Species)
       </button>
       <p class="credit" style="margin-top:14px;">Diagnostic data & 360° scans courtesy of Virginia Tech Department of Forest Resources & Environmental Conservation.</p>
     </div>
@@ -127,7 +144,10 @@
 
     <div class="timer-row">
       <span class="timer-label">Time left</span>
-      <div class="timer-bar-wrap"><div class="timer-bar" id="timerBar"></div></div>
+      <div class="timer-bar-wrap">
+        <div class="timer-bar" id="timerBar"></div>
+        <div class="timer-marker" id="timerMarker"></div>
+      </div>
       <span class="timer-text" id="timerText">15</span>
     </div>
 
@@ -135,6 +155,7 @@
     <div class="image-wrap" id="imageWrap">
       <div class="image-slot" id="imageSlot">
         <span class="image-placeholder" id="imgPlaceholder">🌿</span>
+        <span class="image-soon" id="imgSoon">Photo at <span id="imgSoonSec">5</span>s</span>
         <span class="image-loading hidden" id="imgLoading">Loading specimen…</span>
         <img id="speciesImg" alt="Species photo" />
         <div id="turntableContainer" class="hidden turntable-container">
@@ -150,7 +171,7 @@
     <button type="button" id="spinzamBtn" class="hint-btn hidden" style="border-color:#68d391;color:#68d391;font-weight:600;margin-bottom:8px;">
       🔄 Rotate 3D Bud Scan (360° View)
     </button>
-    <button class="hint-btn" id="hintBtn">👁 Reveal specimen photo</button>
+    <button class="hint-btn" id="hintBtn">👁 Reveal specimen photo now</button>
 
     <div class="prompt-label" id="promptLabel">Scientific Name</div>
     <div class="prompt" id="prompt"></div>
