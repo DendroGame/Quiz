@@ -1,10 +1,9 @@
 /* ============================================================================
-   VIRGINIA TECH MASTER DENDROLOGY ENGINE — v6.0.0
-   - Fully dynamic data hydration from data/species.json (all 1,100+ species)
-   - Discards legacy v5.0.2 static arrays and hardcoded limitations
-   - Cloudflare R2 bucket integration for diagnostic photos and 360 bud scans
-   - Interactive 360 turntable canvas supporting drag/touch interaction
-   - Draggable viewport resizer and multi-mode selection
+   VIRGINIA TECH MASTER DENDROLOGY ENGINE — v1.0.5
+   - Restored "Picture appears at" slider (#picTimeSlider) & dynamic timer marker
+   - Dual-source image resolution pipeline (Direct R2 keys + Wikipedia/iNat fallback)
+   - Dynamic 360 bud turntable scan viewer
+   - Multi-mode selection with full settings panel preservation
 ============================================================================ */
 
 const CLOUDFLARE_R2_BASE = "https://pub-7c0f1ea1e4264248a09ee567d8bcda6f.r2.dev";
@@ -23,6 +22,7 @@ let activeStyle = 'quiz';
 let TOTAL_QUESTIONS = 10;
 let NUM_CHOICES = 4;
 let TIME_LIMIT = 15;
+let PIC_APPEAR_AT = 5;
 let timeLeft = 15;
 let timerId = null;
 
@@ -30,9 +30,11 @@ let qIndex = 0;
 let score = 0;
 let streak = 0;
 let answered = false;
+let hintUsedThisQ = false;
+let noPictures = false;
 let currentCorrect = "";
 
-// 360 Bud Turntable State
+// 360 Turntable Variables
 let currentTurntableFrames = [];
 let turntableIndex = 0;
 let isDraggingTurntable = false;
@@ -41,24 +43,25 @@ let turntableStartX = 0;
 // DOM Cache
 let startScreen, quizScreen, endScreen, stats;
 let promptEl, promptLabel, optionsEl, typeArea, typeInput, feedback;
-let nextBtn, progressBar, timerBar, timerText;
-let speciesImg, imgPlaceholder, imgLoading, imgWrap, spinBtn;
+let nextBtn, progressBar, timerBar, timerText, timerMarker;
+let speciesImg, imgPlaceholder, imgLoading, imgSoon, imgSoonSec, imgWrap, spinBtn;
 let turntableBox, turntableCanvas;
 
 async function init() {
   cacheDOM();
   initImageResizer();
   initEventListeners();
+  updateTimerMarker();
 
   try {
     const res = await fetch('./data/species.json');
     SPECIES_DATA = await res.json();
     ACTIVE_POOL = [...SPECIES_DATA];
     populateFamilyFilter();
-    console.log(`[VT Engine] Loaded ${SPECIES_DATA.length} species from master dataset.`);
+    console.log(`[VT Engine v1.0.5] Loaded ${SPECIES_DATA.length} species.`);
   } catch (err) {
     console.error("Failed to load data/species.json:", err);
-    promptEl.textContent = "Error loading species dataset.";
+    if (promptEl) promptEl.textContent = "Error loading species dataset.";
   }
 }
 
@@ -77,9 +80,12 @@ function cacheDOM() {
   progressBar = document.getElementById('progressBar');
   timerBar = document.getElementById('timerBar');
   timerText = document.getElementById('timerText');
+  timerMarker = document.getElementById('timerMarker');
   speciesImg = document.getElementById('speciesImg');
   imgPlaceholder = document.getElementById('imgPlaceholder');
   imgLoading = document.getElementById('imgLoading');
+  imgSoon = document.getElementById('imgSoon');
+  imgSoonSec = document.getElementById('imgSoonSec');
   imgWrap = document.getElementById('imageWrap');
   spinBtn = document.getElementById('spinzamBtn');
   turntableBox = document.getElementById('turntableContainer');
@@ -87,7 +93,7 @@ function cacheDOM() {
 }
 
 /* ============================================================================
-   DRAGGABLE MEDIA RESIZER
+   IMAGE RESIZER
 ============================================================================ */
 function initImageResizer() {
   const handle = document.getElementById('imgResizeHandle');
@@ -115,11 +121,146 @@ function initImageResizer() {
 }
 
 /* ============================================================================
-   DATA HYDRATION & FILTERS
+   SETTINGS, CONTROLS & TIMERS
 ============================================================================ */
+function initEventListeners() {
+  // Modal open / close
+  document.getElementById('settingsBtn')?.addEventListener('click', () => {
+    document.getElementById('settingsPanel')?.classList.remove('hidden');
+  });
+  document.getElementById('settingsBtnQuiz')?.addEventListener('click', () => {
+    document.getElementById('settingsPanel')?.classList.remove('hidden');
+  });
+  document.getElementById('closeSettingsBtn')?.addEventListener('click', () => {
+    document.getElementById('settingsPanel')?.classList.add('hidden');
+  });
+
+  // Mode Selection
+  document.querySelectorAll('#modeSelect .mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const activeCount = document.querySelectorAll('#modeSelect .mode-btn.active').length;
+      if (btn.classList.contains('active') && activeCount <= 1) return;
+      btn.classList.toggle('active');
+
+      selectedModes = [];
+      document.querySelectorAll('#modeSelect .mode-btn.active').forEach(b => {
+        selectedModes.push(b.dataset.mode);
+      });
+    });
+  });
+
+  // Play Styles (Quiz vs Typing)
+  const qBtn = document.getElementById('playStyleQuiz');
+  const tBtn = document.getElementById('playStyleTyping');
+  function toggleStyle(btn, style) {
+    const activeCount = document.querySelectorAll('#playStyleSelect .mode-btn.active').length;
+    if (btn.classList.contains('active') && activeCount <= 1) return;
+    btn.classList.toggle('active');
+
+    selectedStyles = [];
+    if (qBtn?.classList.contains('active')) selectedStyles.push('quiz');
+    if (tBtn?.classList.contains('active')) selectedStyles.push('typing');
+  }
+  qBtn?.addEventListener('click', () => toggleStyle(qBtn, 'quiz'));
+  tBtn?.addEventListener('click', () => toggleStyle(tBtn, 'typing'));
+
+  // Question Count
+  document.querySelectorAll('#countSelect .count-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#countSelect .count-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      TOTAL_QUESTIONS = parseInt(btn.dataset.count, 10);
+      updateStartButtonLabel();
+    });
+  });
+
+  // Choices Count
+  document.querySelectorAll('#choicesSelect .choice-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#choicesSelect .choice-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      NUM_CHOICES = parseInt(btn.dataset.choices, 10);
+    });
+  });
+
+  // Time Slider
+  document.getElementById('timeLimitSlider')?.addEventListener('input', (e) => {
+    TIME_LIMIT = parseInt(e.target.value, 10);
+    document.getElementById('timeLimitLabel').textContent = `${TIME_LIMIT}s`;
+    if (PIC_APPEAR_AT > TIME_LIMIT) {
+      PIC_APPEAR_AT = TIME_LIMIT;
+      const picSlider = document.getElementById('picTimeSlider');
+      if (picSlider) picSlider.value = PIC_APPEAR_AT;
+      document.getElementById('picTimeLabel').textContent = `${PIC_APPEAR_AT}s left`;
+    }
+    updateTimerMarker();
+  });
+
+  // RESTORED: Picture Appears At Slider Listener
+  document.getElementById('picTimeSlider')?.addEventListener('input', (e) => {
+    let val = parseInt(e.target.value, 10);
+    if (val > TIME_LIMIT) {
+      val = TIME_LIMIT;
+      e.target.value = val;
+    }
+    PIC_APPEAR_AT = val;
+    document.getElementById('picTimeLabel').textContent = `${PIC_APPEAR_AT}s left`;
+    if (imgSoonSec) imgSoonSec.textContent = PIC_APPEAR_AT;
+    updateTimerMarker();
+  });
+
+  // No Pictures Toggle
+  document.getElementById('noPicsToggle')?.addEventListener('change', (e) => {
+    noPictures = e.target.checked;
+    if (imgWrap) imgWrap.style.display = noPictures ? 'none' : 'block';
+  });
+
+  // Core Buttons
+  document.getElementById('startBtn')?.addEventListener('click', () => startQuiz(false));
+  document.getElementById('ultimateBtn')?.addEventListener('click', () => startQuiz(true));
+  nextBtn?.addEventListener('click', nextQuestion);
+  document.getElementById('startOverBtn')?.addEventListener('click', () => startQuiz(false));
+  document.getElementById('homeBtn')?.addEventListener('click', showHomeScreen);
+  document.getElementById('cancelQuizBtn')?.addEventListener('click', showHomeScreen);
+  document.getElementById('hintBtn')?.addEventListener('click', () => {
+    hintUsedThisQ = true;
+    revealImage();
+  });
+
+  document.getElementById('typeSubmitBtn')?.addEventListener('click', handleTypedAnswer);
+  typeInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleTypedAnswer();
+  });
+
+  // 360 Turntable Canvas Rotation
+  if (turntableBox) {
+    turntableBox.addEventListener('pointerdown', (e) => {
+      isDraggingTurntable = true;
+      turntableStartX = e.clientX;
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!isDraggingTurntable || !currentTurntableFrames.length) return;
+      const deltaX = e.clientX - turntableStartX;
+      if (Math.abs(deltaX) > 10) {
+        const step = deltaX > 0 ? 1 : -1;
+        turntableIndex = (turntableIndex + step + currentTurntableFrames.length) % currentTurntableFrames.length;
+        renderTurntableFrame();
+        turntableStartX = e.clientX;
+      }
+    });
+    window.addEventListener('pointerup', () => { isDraggingTurntable = false; });
+  }
+}
+
+function updateTimerMarker() {
+  if (!timerMarker) return;
+  const pct = Math.max(0, Math.min(100, (PIC_APPEAR_AT / TIME_LIMIT) * 100));
+  timerMarker.style.left = `${pct}%`;
+  timerMarker.setAttribute('data-label', `📷 ${PIC_APPEAR_AT}s`);
+}
+
 function populateFamilyFilter() {
   const list = document.getElementById('familyCheckList');
-  const summary = document.getElementById('familySummary');
   if (!list) return;
   list.innerHTML = '';
 
@@ -129,8 +270,7 @@ function populateFamilyFilter() {
     famCounts[fam] = (famCounts[fam] || 0) + 1;
   });
 
-  const sortedFams = Object.keys(famCounts).sort();
-  sortedFams.forEach(fam => {
+  Object.keys(famCounts).sort().forEach(fam => {
     const row = document.createElement('div');
     row.style.padding = '3px 0';
     row.innerHTML = `
@@ -176,109 +316,6 @@ function updateStartButtonLabel() {
 }
 
 /* ============================================================================
-   EVENT LISTENERS & CONTROLS
-============================================================================ */
-function initEventListeners() {
-  // Settings modal
-  document.getElementById('settingsBtn')?.addEventListener('click', () => {
-    document.getElementById('settingsPanel')?.classList.remove('hidden');
-  });
-  document.getElementById('settingsBtnQuiz')?.addEventListener('click', () => {
-    document.getElementById('settingsPanel')?.classList.remove('hidden');
-  });
-  document.getElementById('closeSettingsBtn')?.addEventListener('click', () => {
-    document.getElementById('settingsPanel')?.classList.add('hidden');
-  });
-
-  // Modes
-  document.querySelectorAll('#modeSelect .mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const activeCount = document.querySelectorAll('#modeSelect .mode-btn.active').length;
-      if (btn.classList.contains('active') && activeCount <= 1) return;
-      btn.classList.toggle('active');
-
-      selectedModes = [];
-      document.querySelectorAll('#modeSelect .mode-btn.active').forEach(b => {
-        selectedModes.push(b.dataset.mode);
-      });
-    });
-  });
-
-  // Play styles (Quiz vs Typing)
-  const qBtn = document.getElementById('playStyleQuiz');
-  const tBtn = document.getElementById('playStyleTyping');
-  function toggleStyle(btn, style) {
-    const activeCount = document.querySelectorAll('#playStyleSelect .mode-btn.active').length;
-    if (btn.classList.contains('active') && activeCount <= 1) return;
-    btn.classList.toggle('active');
-
-    selectedStyles = [];
-    if (qBtn?.classList.contains('active')) selectedStyles.push('quiz');
-    if (tBtn?.classList.contains('active')) selectedStyles.push('typing');
-  }
-  qBtn?.addEventListener('click', () => toggleStyle(qBtn, 'quiz'));
-  tBtn?.addEventListener('click', () => toggleStyle(tBtn, 'typing'));
-
-  // Question counts
-  document.querySelectorAll('#countSelect .count-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#countSelect .count-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      TOTAL_QUESTIONS = parseInt(btn.dataset.count, 10);
-      updateStartButtonLabel();
-    });
-  });
-
-  // Choice counts
-  document.querySelectorAll('#choicesSelect .choice-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#choicesSelect .choice-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      NUM_CHOICES = parseInt(btn.dataset.choices, 10);
-    });
-  });
-
-  // Time slider
-  document.getElementById('timeLimitSlider')?.addEventListener('input', (e) => {
-    TIME_LIMIT = parseInt(e.target.value, 10);
-    document.getElementById('timeLimitLabel').textContent = `${TIME_LIMIT}s`;
-  });
-
-  // Buttons
-  document.getElementById('startBtn')?.addEventListener('click', () => startQuiz(false));
-  document.getElementById('ultimateBtn')?.addEventListener('click', () => startQuiz(true));
-  nextBtn?.addEventListener('click', nextQuestion);
-  document.getElementById('startOverBtn')?.addEventListener('click', () => startQuiz(false));
-  document.getElementById('homeBtn')?.addEventListener('click', showHomeScreen);
-  document.getElementById('cancelQuizBtn')?.addEventListener('click', showHomeScreen);
-  document.getElementById('hintBtn')?.addEventListener('click', revealImage);
-
-  document.getElementById('typeSubmitBtn')?.addEventListener('click', handleTypedAnswer);
-  typeInput?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleTypedAnswer();
-  });
-
-  // 360 Turntable canvas events
-  if (turntableBox) {
-    turntableBox.addEventListener('pointerdown', (e) => {
-      isDraggingTurntable = true;
-      turntableStartX = e.clientX;
-    });
-    window.addEventListener('pointermove', (e) => {
-      if (!isDraggingTurntable || !currentTurntableFrames.length) return;
-      const deltaX = e.clientX - turntableStartX;
-      if (Math.abs(deltaX) > 12) {
-        const step = deltaX > 0 ? 1 : -1;
-        turntableIndex = (turntableIndex + step + currentTurntableFrames.length) % currentTurntableFrames.length;
-        renderTurntableFrame();
-        turntableStartX = e.clientX;
-      }
-    });
-    window.addEventListener('pointerup', () => { isDraggingTurntable = false; });
-  }
-}
-
-/* ============================================================================
    QUIZ ENGINE
 ============================================================================ */
 function startQuiz(isUltimate = false) {
@@ -305,6 +342,7 @@ function startQuiz(isUltimate = false) {
 
 function renderQuestion() {
   answered = false;
+  hintUsedThisQ = false;
   feedback.classList.add('hidden');
   nextBtn.classList.add('hidden');
   turntableBox.classList.add('hidden');
@@ -317,7 +355,6 @@ function renderQuestion() {
   CURRENT_Q = QUESTIONS[qIndex];
   if (!CURRENT_Q) return;
 
-  // Header status
   document.getElementById('qNum').textContent = qIndex + 1;
   document.getElementById('totalQ').textContent = QUESTIONS.length;
   progressBar.style.width = `${(qIndex / QUESTIONS.length) * 100}%`;
@@ -340,10 +377,9 @@ function renderQuestion() {
     currentCorrect = commonName;
   }
 
-  // Hydrate visual specimen and 360 bud turntable
+  // Load Virginia Tech media
   loadDiagnosticMedia(CURRENT_Q);
 
-  // Setup answer mode
   if (activeStyle === 'typing') {
     optionsEl.classList.add('hidden');
     typeArea.classList.remove('hidden');
@@ -438,56 +474,82 @@ function nextQuestion() {
 }
 
 /* ============================================================================
-   CLOUDFLARE R2 & 3D BUD ROTATION PIPELINE
+   VIRGINIA TECH MEDIA RESOLUTION & TURNTABLE
 ============================================================================ */
 async function loadDiagnosticMedia(species) {
   imgLoading.classList.remove('hidden');
   imgPlaceholder.style.opacity = '0.4';
+  if (imgSoon) {
+    imgSoon.classList.remove('hidden');
+    if (imgSoonSec) imgSoonSec.textContent = PIC_APPEAR_AT;
+  }
 
-  const cleanName = (species.common || "").toLowerCase().replace(/[^a-z0-9]/g, '_');
-  const r2ImageFolder = `${CLOUDFLARE_R2_BASE}/${cleanName}_image`;
+  // 1. Resolve Virginia Tech Factsheet Primary Image
+  const cleanSci = (species.scientific || "").trim().replace(/\s+/g, '_');
+  const cleanCom = (species.common || "").toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const sid = species.id || "";
 
-  // 1. Load flat diagnostic photo
-  const primaryUrl = `${r2ImageFolder}/diagnostic_0.jpg`;
-  speciesImg.src = primaryUrl;
-  speciesImg.onload = () => { imgLoading.classList.add('hidden'); };
-  speciesImg.onerror = () => {
-    // Fallback to Wikipedia / iNaturalist if not yet uploaded to R2
-    fetchFallbackPhoto(species.scientific);
+  // Test primary R2 path conventions
+  const r2FolderCandidateA = `${CLOUDFLARE_R2_BASE}/${cleanSci}_${sid}`;
+  const r2FolderCandidateB = `${CLOUDFLARE_R2_BASE}/${cleanCom}_image`;
+
+  const primaryPhoto = new Image();
+  primaryPhoto.src = `${r2FolderCandidateA}/diagnostic_0.jpg`;
+
+  primaryPhoto.onload = () => {
+    speciesImg.src = primaryPhoto.src;
+    imgLoading.classList.add('hidden');
+    if (hintUsedThisQ || timeLeft <= PIC_APPEAR_AT) revealImage();
   };
 
-  // 2. Configure 360 bud scan
-  currentTurntableFrames = [];
+  primaryPhoto.onerror = () => {
+    // Try candidate B
+    const secondPhoto = new Image();
+    secondPhoto.src = `${r2FolderCandidateB}/diagnostic_0.jpg`;
+    secondPhoto.onload = () => {
+      speciesImg.src = secondPhoto.src;
+      imgLoading.classList.add('hidden');
+      if (hintUsedThisQ || timeLeft <= PIC_APPEAR_AT) revealImage();
+    };
+    secondPhoto.onerror = () => {
+      // Direct Web Fallback (Wikipedia / iNaturalist)
+      fetchFallbackPhoto(species.scientific);
+    };
+  };
+
+  // 2. Resolve 360 Turntable Bud Scan
   const testFrame = new Image();
-  const frame0Url = `${r2ImageFolder}/3d_bud_scan/frame_00.jpg`;
-  testFrame.src = frame0Url;
+  testFrame.src = `${r2FolderCandidateA}/3d_bud_scan/frame_00.jpg`;
 
   testFrame.onload = () => {
-    // 360 bud scan confirmed on Cloudflare R2
     spinBtn.classList.remove('hidden');
-    spinBtn.onclick = () => activate360Turntable(r2ImageFolder);
+    spinBtn.onclick = () => activate360Turntable(`${r2FolderCandidateA}/3d_bud_scan`);
   };
+
   testFrame.onerror = () => {
-    // Check if a legacy Spinzam iframe exists
     if (species.spinzam_url) {
       spinBtn.classList.remove('hidden');
-      spinBtn.onclick = () => embedLegacySpinzam(species.spinzam_url);
+      spinBtn.onclick = () => {
+        const slot = document.getElementById('imageSlot');
+        if (slot) {
+          slot.innerHTML = `<iframe src="${species.spinzam_url}" width="100%" height="100%" frameborder="0" scrolling="no" style="border:none;" allowfullscreen></iframe>`;
+        }
+      };
     } else {
       spinBtn.classList.add('hidden');
     }
   };
 }
 
-function activate360Turntable(folderUrl) {
+function activate360Turntable(scanFolderPath) {
   turntableBox.classList.remove('hidden');
   speciesImg.classList.remove('revealed');
   currentTurntableFrames = [];
 
-  // Pre-cache the 36 turntable frames
   for (let i = 0; i < 36; i++) {
     const frameNum = String(i).padStart(2, '0');
     const img = new Image();
-    img.src = `${folderUrl}/3d_bud_scan/frame_${frameNum}.jpg`;
+    img.src = `${scanFolderPath}/frame_${frameNum}.jpg`;
     currentTurntableFrames.push(img);
   }
 
@@ -513,13 +575,6 @@ function renderTurntableFrame() {
   }
 }
 
-function embedLegacySpinzam(url) {
-  const slot = document.getElementById('imageSlot');
-  if (slot) {
-    slot.innerHTML = `<iframe src="${url}" width="100%" height="100%" frameborder="0" scrolling="no" style="border:none;" allowfullscreen></iframe>`;
-  }
-}
-
 async function fetchFallbackPhoto(scientificName) {
   try {
     const clean = scientificName.replace(/spp\.?/i, '').trim();
@@ -529,30 +584,48 @@ async function fetchFallbackPhoto(scientificName) {
 
     if (taxon?.default_photo?.medium_url) {
       speciesImg.src = taxon.default_photo.medium_url;
-      speciesImg.onload = () => { imgLoading.classList.add('hidden'); };
-    } else {
-      imgLoading.classList.add('hidden');
+      speciesImg.onload = () => {
+        imgLoading.classList.add('hidden');
+        if (hintUsedThisQ || timeLeft <= PIC_APPEAR_AT) revealImage();
+      };
+      return;
     }
-  } catch (err) {
-    imgLoading.classList.add('hidden');
-  }
+  } catch (err) {}
+
+  imgLoading.classList.add('hidden');
 }
 
 function revealImage() {
+  if (noPictures) return;
   speciesImg.classList.add('revealed');
   imgPlaceholder.style.opacity = '0';
+  if (imgSoon) imgSoon.classList.add('hidden');
 }
 
 /* ============================================================================
-   TIMER & SCREENS
+   TIMER RUNNER WITH AUTO-REVEAL AT PIC_APPEAR_AT
 ============================================================================ */
 function startTimer() {
   stopTimer();
   timeLeft = TIME_LIMIT;
   updateTimerUI();
+
+  // If set to appear immediately or earlier
+  if (PIC_APPEAR_AT >= TIME_LIMIT) {
+    hintUsedThisQ = true;
+    revealImage();
+  }
+
   timerId = setInterval(() => {
     timeLeft--;
     updateTimerUI();
+
+    // Auto-reveal picture when countdown reaches PIC_APPEAR_AT
+    if (timeLeft <= PIC_APPEAR_AT && !hintUsedThisQ && !answered) {
+      hintUsedThisQ = true;
+      revealImage();
+    }
+
     if (timeLeft <= 0) {
       stopTimer();
       if (!answered) evaluateAnswer(null, "");
@@ -566,7 +639,18 @@ function stopTimer() {
 
 function updateTimerUI() {
   if (timerText) timerText.textContent = timeLeft;
-  if (timerBar) timerBar.style.width = `${(timeLeft / TIME_LIMIT) * 100}%`;
+  if (timerBar) {
+    const pct = (timeLeft / TIME_LIMIT) * 100;
+    timerBar.style.width = `${pct}%`;
+
+    if (timeLeft <= 5) {
+      timerBar.style.background = 'var(--timer-danger)';
+    } else if (timeLeft <= 10) {
+      timerBar.style.background = 'var(--timer-warn)';
+    } else {
+      timerBar.style.background = 'var(--timer-ok)';
+    }
+  }
 }
 
 function showEndScreen() {
