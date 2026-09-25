@@ -2,102 +2,167 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dendrology Master Quiz</title>
-  <link rel="stylesheet" href="css/main.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>🌲 Dendrology Master Quiz</title>
+  <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Baseline modern styling fallbacks */
+    :root {
+      --bg: #0f1a14;
+      --card-bg: #16241c;
+      --accent: #3d8b6e;
+      --text: #e8f5ee;
+      --muted: #8aa899;
+      --correct: #2e7d32;
+      --wrong: #c62828;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      margin: 0;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid rgba(61,139,110,0.3);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      margin-top: 16px;
+      box-sizing: border-box;
+    }
+    .hidden { display: none !important; }
+    .big-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 14px 20px;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 10px;
+      cursor: pointer;
+      width: 100%;
+      transition: opacity 0.2s;
+    }
+    .big-btn:hover { opacity: 0.9; }
+    .image-slot {
+      position: relative;
+      width: 100%;
+      height: 240px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .image-slot img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .options {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .option-btn {
+      background: rgba(61,139,110,0.15);
+      border: 1px solid rgba(61,139,110,0.4);
+      color: var(--text);
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+    }
+    .option-btn:hover:not(:disabled) {
+      background: rgba(61,139,110,0.3);
+    }
+    .option-btn.correct {
+      background: var(--correct) !important;
+      border-color: #4caf50 !important;
+      color: #fff;
+    }
+    .option-btn.wrong {
+      background: var(--wrong) !important;
+      border-color: #f44336 !important;
+      color: #fff;
+    }
+    .feedback {
+      margin-top: 14px;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 600;
+      text-align: center;
+    }
+    .feedback.correct { background: rgba(46,125,50,0.25); color: #81c784; }
+    .feedback.wrong { background: rgba(198,40,40,0.25); color: #e57373; }
+    .stats-bar {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 600px;
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+  </style>
 </head>
 <body>
-  <!-- Stats Bar -->
-  <header id="quizHeader" class="header-bar hidden">
-    <div class="stat-pill">Score: <span id="scoreDisplay">0</span></div>
-    <div class="stat-pill">Streak: <span id="streakDisplay">0</span></div>
-    <div class="stat-pill">Question: <span id="qCurrent">1</span>/<span id="qTotal">10</span></div>
-    <button id="abortQuizBtn" class="btn-sm">Exit</button>
-  </header>
 
-  <main id="appContainer">
-    <!-- Home / Setup View -->
-    <section id="startScreen" class="view-panel">
-      <div class="brand">
-        <h1 class="game-title">Dendrology Master</h1>
-        <p class="game-subtitle">1,250 Woody Plants of North America</p>
-      </div>
+  <!-- Top Stats Display -->
+  <div class="stats-bar">
+    <div>Score: <strong id="score" style="color:var(--text);">0</strong></div>
+    <div>Streak: <strong id="streak" style="color:var(--text);">0</strong></div>
+  </div>
 
-      <div class="user-card">
-        <label for="playerNickname">Player Nickname</label>
-        <input type="text" id="playerNickname" placeholder="Forester" maxlength="20">
-      </div>
+  <!-- Start Screen -->
+  <div class="card" id="startScreen">
+    <h1 style="margin-top:0; font-family:'Lobster', cursive; color:#a8e0c4; text-align:center;">🌲 Dendrology Quiz</h1>
+    <p style="text-align:center; color:var(--muted); font-size:0.95rem;">
+      High-resolution diagnostic specimens powered by Cloudflare R2 storage.
+    </p>
+    <button class="big-btn" id="startBtn" style="margin-top:20px;">Start 10-Question Quiz</button>
+  </div>
 
-      <!-- Quick Mode Selectors -->
-      <div class="selector-group">
-        <div class="group-label">Quiz Mode</div>
-        <div id="modeToggleGroup" class="pill-grid">
-          <button class="pill active" data-mode="sci-to-common">Sci → Common</button>
-          <button class="pill" data-mode="common-to-sci">Common → Sci</button>
-          <button class="pill" data-mode="identify">Photo ID</button>
-          <button class="pill" data-mode="family">Family Quiz</button>
-          <button class="pill" data-mode="flash">Flash Cards</button>
-        </div>
-      </div>
+  <!-- Active Quiz Screen -->
+  <div class="card hidden" id="quizScreen">
+    <div class="image-slot">
+      <div id="imgLoading" style="position:absolute; color:var(--muted);">Loading image...</div>
+      <img id="speciesImg" alt="Species specimen photo" class="hidden" />
+    </div>
 
-      <!-- Question Count -->
-      <div class="selector-group">
-        <div class="group-label">Round Length</div>
-        <div id="countToggleGroup" class="pill-grid">
-          <button class="pill" data-count="10">10</button>
-          <button class="pill active" data-count="25">25</button>
-          <button class="pill" data-count="50">50</button>
-          <button class="pill" data-count="100">100</button>
-          <button class="pill" data-count="all">All Available</button>
-        </div>
-      </div>
+    <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted);" id="promptLabel">Scientific Name</div>
+    <h2 id="prompt" style="margin:4px 0 16px; color:#a8e0c4; font-style:italic;">—</h2>
 
-      <div class="action-stack">
-        <button id="startRoundBtn" class="btn-primary">Launch Test</button>
-        <div class="btn-subrow">
-          <button id="openFilterModalBtn" class="btn-secondary">Filter Species (1,250)</button>
-          <button id="openSettingsModalBtn" class="btn-secondary">Settings</button>
-        </div>
-      </div>
-    </section>
+    <div class="options" id="options"></div>
 
-    <!-- Interactive Quiz View -->
-    <section id="quizScreen" class="view-panel hidden">
-      <!-- Responsive Resizable Viewer Container -->
-      <div id="mediaViewer" class="media-box">
-        <div id="imageStage" class="stage">
-          <img id="activePhoto" alt="Diagnostic woody specimen" class="specimen-img hidden">
-          <div id="mediaLoader" class="loader-spinner"></div>
-          <div id="mediaFallback" class="fallback-note">Photo will reveal on submit</div>
-        </div>
-        <div id="resizeBar" class="drag-handle" title="Drag to resize photo view">···</div>
-      </div>
+    <div class="feedback hidden" id="feedback"></div>
+    <button class="big-btn hidden" id="nextBtn" style="margin-top:16px;">Next Question →</button>
+  </div>
 
-      <!-- Prompt Section -->
-      <div class="prompt-box">
-        <span id="promptCategory" class="category-tag">Scientific Name</span>
-        <h2 id="promptQuestion" class="prompt-text">—</h2>
-        <div id="promptPronunciation" class="pronunciation-text"></div>
-      </div>
+  <!-- End Screen -->
+  <div class="card hidden" id="endScreen">
+    <h2 style="text-align:center; color:#a8e0c4;">Quiz Complete!</h2>
+    <p id="endMsg" style="text-align:center; font-size:1.2rem;"></p>
+    <button class="big-btn" id="homeBtn" style="margin-top:16px;">Play Again</button>
+  </div>
 
-      <!-- Multiple Choice Deck -->
-      <div id="choiceContainer" class="deck-grid"></div>
-
-      <!-- Typing Input (Hidden by default) -->
-      <div id="typingContainer" class="typing-deck hidden">
-        <input type="text" id="typeInput" placeholder="Type name..." autocomplete="off">
-        <button id="typeSubmitBtn" class="btn-primary">Submit</button>
-      </div>
-
-      <!-- Post-Answer Feedback -->
-      <div id="feedbackBanner" class="feedback-banner hidden"></div>
-      <button id="nextCardBtn" class="btn-primary hidden">Continue</button>
-    </section>
-  </main>
-
+  <!-- Load Main Application Controller -->
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
