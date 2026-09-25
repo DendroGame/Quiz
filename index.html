@@ -4,12 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>🌲 Dendrology Master Quiz</title>
-  <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    /* Baseline modern styling fallbacks */
     :root {
       --bg: #0f1a14;
       --card-bg: #16241c;
@@ -19,12 +17,13 @@
       --correct: #2e7d32;
       --wrong: #c62828;
     }
+    * { box-sizing: border-box; }
     body {
       background: var(--bg);
       color: var(--text);
       font-family: 'Inter', system-ui, sans-serif;
       margin: 0;
-      padding: 16px;
+      padding: 14px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -34,19 +33,108 @@
       background: var(--card-bg);
       border: 1px solid rgba(61,139,110,0.3);
       border-radius: 16px;
-      padding: 24px;
-      max-width: 600px;
+      padding: 20px;
+      max-width: 620px;
       width: 100%;
       box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-      margin-top: 16px;
-      box-sizing: border-box;
+      margin-top: 10px;
     }
     .hidden { display: none !important; }
+    
+    /* Media Viewer */
+    .media-wrap {
+      width: 100%;
+      height: 250px;
+      min-height: 120px;
+      max-height: 520px;
+      position: relative;
+      background: #080d0a;
+      border-radius: 12px 12px 0 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .media-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      user-select: none;
+    }
+    .resize-handle {
+      width: 100%;
+      height: 18px;
+      background: rgba(61,139,110,0.25);
+      border-radius: 0 0 12px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: ns-resize;
+      font-size: 1rem;
+      color: var(--muted);
+      user-select: none;
+      margin-bottom: 10px;
+      transition: background 0.2s;
+    }
+    .resize-handle:hover { background: rgba(61,139,110,0.5); }
+
+    /* Part Selector Tabs */
+    .part-tabs {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      margin-bottom: 12px;
+      padding-bottom: 4px;
+    }
+    .tab-btn {
+      background: rgba(61,139,110,0.18);
+      border: 1px solid rgba(61,139,110,0.4);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: #5ab892;
+    }
+
+    /* 360 Turntable Controls */
+    .turntable-panel {
+      position: absolute;
+      bottom: 8px;
+      left: 10px;
+      right: 10px;
+      background: rgba(15, 26, 20, 0.85);
+      border-radius: 8px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      backdrop-filter: blur(4px);
+    }
+    .turntable-panel input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .turntable-label {
+      font-size: 0.75rem;
+      color: #a8e0c4;
+      white-space: nowrap;
+    }
+
+    /* Game controls & options */
     .big-btn {
       background: var(--accent);
       color: #fff;
       border: none;
-      padding: 14px 20px;
+      padding: 13px 18px;
       font-size: 1rem;
       font-weight: 600;
       border-radius: 10px;
@@ -55,53 +143,26 @@
       transition: opacity 0.2s;
     }
     .big-btn:hover { opacity: 0.9; }
-    .image-slot {
-      position: relative;
-      width: 100%;
-      height: 240px;
-      background: rgba(0,0,0,0.3);
-      border-radius: 12px;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 16px;
-    }
-    .image-slot img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
     .options {
       display: grid;
       grid-template-columns: 1fr;
       gap: 10px;
-      margin-top: 16px;
+      margin-top: 14px;
     }
     .option-btn {
       background: rgba(61,139,110,0.15);
       border: 1px solid rgba(61,139,110,0.4);
       color: var(--text);
-      padding: 14px;
+      padding: 13px;
       border-radius: 8px;
-      font-size: 1rem;
+      font-size: 0.95rem;
       cursor: pointer;
       text-align: left;
       transition: all 0.2s;
     }
-    .option-btn:hover:not(:disabled) {
-      background: rgba(61,139,110,0.3);
-    }
-    .option-btn.correct {
-      background: var(--correct) !important;
-      border-color: #4caf50 !important;
-      color: #fff;
-    }
-    .option-btn.wrong {
-      background: var(--wrong) !important;
-      border-color: #f44336 !important;
-      color: #fff;
-    }
+    .option-btn:hover:not(:disabled) { background: rgba(61,139,110,0.3); }
+    .option-btn.correct { background: var(--correct) !important; color: #fff; }
+    .option-btn.wrong { background: var(--wrong) !important; color: #fff; }
     .feedback {
       margin-top: 14px;
       padding: 10px;
@@ -115,16 +176,15 @@
       display: flex;
       justify-content: space-between;
       width: 100%;
-      max-width: 600px;
+      max-width: 620px;
       font-size: 0.9rem;
       color: var(--muted);
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
   </style>
 </head>
 <body>
 
-  <!-- Top Stats Display -->
   <div class="stats-bar">
     <div>Score: <strong id="score" style="color:var(--text);">0</strong></div>
     <div>Streak: <strong id="streak" style="color:var(--text);">0</strong></div>
@@ -132,25 +192,44 @@
 
   <!-- Start Screen -->
   <div class="card" id="startScreen">
-    <h1 style="margin-top:0; font-family:'Lobster', cursive; color:#a8e0c4; text-align:center;">🌲 Dendrology Quiz</h1>
+    <h1 style="margin-top:0; font-family:'Lobster', cursive; color:#a8e0c4; text-align:center;">🌲 Dendrology Master Quiz</h1>
     <p style="text-align:center; color:var(--muted); font-size:0.95rem;">
-      High-resolution diagnostic specimens powered by Cloudflare R2 storage.
+      Full diagnostic library with leaf, bark, twig, fruit, and 360° bud rotations.
     </p>
-    <button class="big-btn" id="startBtn" style="margin-top:20px;">Start 10-Question Quiz</button>
+    <button class="big-btn" id="startBtn" style="margin-top:16px;">Start 10-Question Quiz</button>
   </div>
 
-  <!-- Active Quiz Screen -->
+  <!-- Quiz Screen -->
   <div class="card hidden" id="quizScreen">
-    <div class="image-slot">
-      <div id="imgLoading" style="position:absolute; color:var(--muted);">Loading image...</div>
-      <img id="speciesImg" alt="Species specimen photo" class="hidden" />
+    
+    <!-- Resizable Stage -->
+    <div class="media-wrap" id="mediaWrap">
+      <div id="imgLoading" style="color:var(--muted); position:absolute;">Loading specimen...</div>
+      <img id="speciesImg" alt="Tree diagnostic specimen" class="hidden" />
+
+      <!-- 360 Bud Scrubber Overlay -->
+      <div id="turntablePanel" class="turntable-panel hidden">
+        <span class="turntable-label">🔄 360° Bud Spin</span>
+        <input type="range" id="frameSlider" min="0" max="35" value="0">
+        <span class="turntable-label" id="frameLabel">01/36</span>
+      </div>
+    </div>
+    <div class="resize-handle" id="resizeHandle" title="Drag to adjust photo height">⋯</div>
+
+    <!-- Diagnostic Part Tabs -->
+    <div class="part-tabs" id="partTabs">
+      <button class="tab-btn active" data-part="leaf">🍃 Leaf</button>
+      <button class="tab-btn" data-part="bark">🪵 Bark</button>
+      <button class="tab-btn" data-part="twig">🌿 Twig</button>
+      <button class="tab-btn" data-part="fruit">🌰 Fruit/Flower</button>
+      <button class="tab-btn" data-part="form">🌳 Form</button>
+      <button class="tab-btn" id="bud360Tab" data-part="360">🔄 3D Bud Scan</button>
     </div>
 
     <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted);" id="promptLabel">Scientific Name</div>
     <h2 id="prompt" style="margin:4px 0 16px; color:#a8e0c4; font-style:italic;">—</h2>
 
     <div class="options" id="options"></div>
-
     <div class="feedback hidden" id="feedback"></div>
     <button class="big-btn hidden" id="nextBtn" style="margin-top:16px;">Next Question →</button>
   </div>
@@ -162,7 +241,6 @@
     <button class="big-btn" id="homeBtn" style="margin-top:16px;">Play Again</button>
   </div>
 
-  <!-- Load Main Application Controller -->
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
