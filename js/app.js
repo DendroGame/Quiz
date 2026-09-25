@@ -1,8 +1,10 @@
 /* ============================================================================
-   DENDROLOGY QUIZ ENGINE — v1.0.3
-   - Restored full settings panel, question counts, and choice options
-   - Diagnostic photo pipeline with resilient Wikimedia & iNaturalist resolution
-   - Draggable image resize bar support (pointer & touch)
+   DENDROLOGY MASTER QUIZ ENGINE — v1.0.4
+   - Multi-mode selection enabled: combines Sci->Common, Common->Sci, Family
+   - Multi-input selection enabled: combines Multiple Choice and Typing
+   - Working Quiz Test #1 - #5 lab presets
+   - Diagnostic photo pipeline with resilient fallbacks
+   - Draggable image resize handle (pointer & touch)
    - Integrated Spinzam 3D Bud Scan modal viewer
 ============================================================================ */
 
@@ -50,9 +52,13 @@ let TIME_LIMIT = 15;
 let TOTAL = 10;
 let NUM_CHOICES = 4;
 let selectedSpecies = [];
-let mode = 'sci-to-common';
+
+// Multi-select state
 let selectedModes = ['sci-to-common'];
 let selectedStyles = ['quiz'];
+let currentMode = 'sci-to-common';
+let typeAnswerMode = false;
+
 let score = 0;
 let streak = 0;
 let qIndex = 0;
@@ -65,14 +71,26 @@ let timeLeft = TIME_LIMIT;
 let answered = false;
 let hintUsedThisQ = false;
 
-// DOM references
+// DOM Selectors
 let startScreen, quizScreen, endScreen, stats, promptEl, promptLabel;
 let optionsEl, feedback, nextBtn, progressBar, timerBar, timerText, speciesImg;
 let imgPlaceholder, imgLoading, spinBtn;
 
+function familyNameForPair(pair) {
+  if (!pair || !pair.length) return '';
+  let idx = -1;
+  for (let i = 0; i < SPECIES.length; i++) {
+    if (SPECIES[i][0] === pair[0] && SPECIES[i][1] === pair[1]) { idx = i; break; }
+  }
+  if (idx < 0) return 'Pinaceae';
+  const num = SPECIES_FAMILY[idx];
+  const f = FAMILIES.find(item => item.num === num);
+  return f ? `${f.num}. ${f.name}` : String(num);
+}
+
 function initImageResizer() {
-  const handle = document.getElementById('imgResizeHandle');
-  const wrap = document.getElementById('imageWrap');
+  const handle = document.getElementById('imgResizeHandle') || document.getElementById('resizeBar');
+  const wrap = document.getElementById('imageWrap') || document.getElementById('mediaViewer');
   if (!handle || !wrap) return;
 
   let startY, startH;
@@ -142,7 +160,7 @@ function initUISelectors() {
 }
 
 function initSettingsAndPanels() {
-  // Settings toggle
+  // Settings modal open/close
   document.getElementById('settingsBtn')?.addEventListener('click', () => {
     document.getElementById('settingsPanel')?.classList.remove('hidden');
   });
@@ -153,37 +171,53 @@ function initSettingsAndPanels() {
     document.getElementById('settingsPanel')?.classList.add('hidden');
   });
 
-  // Modes
+  // MULTI-SELECT QUIZ MODES (Sci->Common, Common->Sci, Family)
   document.querySelectorAll('#modeSelect .mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#modeSelect .mode-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      mode = btn.dataset.mode;
-      selectedModes = [mode];
+      const allModeBtns = document.querySelectorAll('#modeSelect .mode-btn');
+      const isCurrentlyActive = btn.classList.contains('active');
+      const activeCount = document.querySelectorAll('#modeSelect .mode-btn.active').length;
+
+      // Prevent deselecting everything: keep at least 1 mode active
+      if (isCurrentlyActive && activeCount <= 1) return;
+
+      btn.classList.toggle('active');
+
+      selectedModes = [];
+      allModeBtns.forEach(b => {
+        if (b.classList.contains('active')) selectedModes.push(b.dataset.mode);
+      });
     });
   });
 
-  // Play Styles
+  // MULTI-SELECT INPUT STYLES (Multiple Choice, Typing)
   const quizBtn = document.getElementById('playStyleQuiz');
   const typeBtn = document.getElementById('playStyleTyping');
-  quizBtn?.addEventListener('click', () => {
-    quizBtn.classList.add('active');
-    typeBtn.classList.remove('active');
-    selectedStyles = ['quiz'];
-  });
-  typeBtn?.addEventListener('click', () => {
-    typeBtn.classList.add('active');
-    quizBtn.classList.remove('active');
-    selectedStyles = ['typing'];
-  });
 
-  // Timer
+  function togglePlayStyle(clickedBtn) {
+    const isCurrentlyActive = clickedBtn.classList.contains('active');
+    const activeCount = document.querySelectorAll('#playStyleSelect .mode-btn.active').length;
+
+    // Prevent deselecting both
+    if (isCurrentlyActive && activeCount <= 1) return;
+
+    clickedBtn.classList.toggle('active');
+
+    selectedStyles = [];
+    if (quizBtn?.classList.contains('active')) selectedStyles.push('quiz');
+    if (typeBtn?.classList.contains('active')) selectedStyles.push('typing');
+  }
+
+  quizBtn?.addEventListener('click', () => togglePlayStyle(quizBtn));
+  typeBtn?.addEventListener('click', () => togglePlayStyle(typeBtn));
+
+  // Timer slider
   document.getElementById('timeLimitSlider')?.addEventListener('input', (e) => {
     TIME_LIMIT = parseInt(e.target.value, 10);
     document.getElementById('timeLimitLabel').textContent = TIME_LIMIT + 's';
   });
 
-  // Counts
+  // Question counts
   document.querySelectorAll('#countSelect .count-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#countSelect .count-btn').forEach(b => b.classList.remove('active'));
@@ -194,7 +228,7 @@ function initSettingsAndPanels() {
     });
   });
 
-  // Choice Counts
+  // Choices count
   document.querySelectorAll('#choicesSelect .choice-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#choicesSelect .choice-btn').forEach(b => b.classList.remove('active'));
@@ -203,7 +237,7 @@ function initSettingsAndPanels() {
     });
   });
 
-  // Action Buttons
+  // Game buttons
   nextBtn?.addEventListener('click', nextQuestion);
   document.getElementById('startOverBtn')?.addEventListener('click', () => window.startQuiz(false));
   document.getElementById('homeBtn')?.addEventListener('click', () => {
@@ -250,7 +284,7 @@ function initFamilySelect() {
     if (summary) summary.textContent = `All species (${SPECIES.length})`;
   });
 
-  // Presets
+  // Lab Presets #1 - #5
   const presets = [
     { id: 'quizTest1Toggle', sci: QUIZ_TEST_1_SCI },
     { id: 'quizTest2Toggle', sci: QUIZ_TEST_2_SCI },
@@ -314,21 +348,36 @@ function showQuestion() {
   answered = false;
   hintUsedThisQ = false;
 
+  // Randomly pick one of the actively enabled game modes
+  currentMode = selectedModes[Math.floor(Math.random() * selectedModes.length)] || 'sci-to-common';
+  
+  // Randomly pick one of the actively enabled play styles
+  const activeStyle = selectedStyles[Math.floor(Math.random() * selectedStyles.length)] || 'quiz';
+  typeAnswerMode = (activeStyle === 'typing');
+
   const pair = questions[qIndex];
   currentPair = pair;
   currentSpeciesObj = SPECIES_DATA.find(s => s.scientific.toLowerCase() === pair[1].toLowerCase()) || null;
 
-  const isSciToCommon = mode === 'sci-to-common';
-  currentCorrect = isSciToCommon ? pair[0] : pair[1];
-
-  promptLabel.textContent = isSciToCommon ? 'Scientific name' : 'Common name';
-  promptEl.textContent = isSciToCommon ? pair[1] : pair[0];
+  if (currentMode === 'common-to-sci') {
+    promptLabel.textContent = 'Scientific name';
+    promptEl.textContent = pair[0];
+    currentCorrect = pair[1];
+  } else if (currentMode === 'family') {
+    promptLabel.textContent = 'Botanical Family';
+    promptEl.textContent = `${pair[0]} (${pair[1]})`;
+    currentCorrect = familyNameForPair(pair);
+  } else {
+    promptLabel.textContent = 'Common name';
+    promptEl.textContent = pair[1];
+    currentCorrect = pair[0];
+  }
 
   document.getElementById('qNum').textContent = qIndex + 1;
   document.getElementById('totalQ').textContent = TOTAL;
   progressBar.style.width = ((qIndex / TOTAL) * 100) + '%';
 
-  // 3D Bud Scan integration
+  // 3D Bud Scan button logic
   if (spinBtn) {
     if (currentSpeciesObj && currentSpeciesObj.spinzam_url) {
       spinBtn.classList.remove('hidden');
@@ -346,24 +395,30 @@ function showQuestion() {
     }
   }
 
-  // Quiz vs Typing
+  // Render Multiple Choice or Typing Input
   const typeArea = document.getElementById('typeAnswerArea');
   const typeInput = document.getElementById('typeAnswerInput');
-  if (selectedStyles.includes('typing')) {
+
+  if (typeAnswerMode) {
     optionsEl.classList.add('hidden');
-    typeArea.classList.remove('hidden');
+    typeArea?.classList.remove('hidden');
     if (typeInput) {
       typeInput.value = '';
       typeInput.disabled = false;
       setTimeout(() => typeInput.focus(), 50);
     }
   } else {
-    typeArea.classList.add('hidden');
+    typeArea?.classList.add('hidden');
     optionsEl.classList.remove('hidden');
 
-    const choices = [currentCorrect];
-    const distractorPool = SPECIES.map(p => isSciToCommon ? p[0] : p[1]).filter(n => n !== currentCorrect);
-    shuffle(distractorPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
+    let choices = [currentCorrect];
+    if (currentMode === 'family') {
+      const famPool = FAMILIES.map(f => `${f.num}. ${f.name}`).filter(f => f !== currentCorrect);
+      shuffle(famPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
+    } else {
+      const distractorPool = SPECIES.map(p => (currentMode === 'common-to-sci' ? p[1] : p[0])).filter(n => n !== currentCorrect);
+      shuffle(distractorPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
+    }
 
     shuffle(choices).forEach(opt => {
       const btn = document.createElement('button');
@@ -494,7 +549,6 @@ async function loadPhoto(sciName) {
       return;
     }
 
-    // Secondary fallback
     const wiki = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(clean)}`);
     const wikiData = await wiki.json();
     if (wikiData.thumbnail?.source && speciesImg) {
