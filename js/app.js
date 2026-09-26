@@ -7,6 +7,7 @@
 ============================================================================ */
 
 const CLOUDFLARE_R2_BASE = "https://pub-7c0f1ea1e4264248a09ee567d8bcda6f.r2.dev";
+const WORKER_API = "https://quiz-api.jonathantate-ent.workers.dev/";
 
 let SPECIES_DATA = [];
 let ACTIVE_POOL = [];
