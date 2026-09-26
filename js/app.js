@@ -1,59 +1,32 @@
 /* ============================================================================
-   DENDROLOGY MASTER QUIZ ENGINE — v1.0.18
-   - Live Cloudflare KV Global Leaderboard on Home Screen
-   - Slide-over Settings Sidebar
-   - Required Name Validation / Guest Opt-out (No Cloudflare Save)
-   - Dual-Source Diagnostic R2/iNaturalist Photo Resolver
-   - Full Spinzam 3D Scrubber Integration
+   DENDROLOGY MASTER QUIZ ENGINE
+   - Forgiving Fuzzy Search via Fuse.js (common name, binomial, family)
+   - Cloudflare Worker KV Presets & Global Leaderboard Integration
+   - On-demand Image Loading (Cloudflare R2 + iNaturalist fallback)
+   - Multiple Choice & Typing Modes
 ============================================================================ */
 
 const CLOUDFLARE_R2_BASE = "https://pub-7c8f1ea1e424248a09ee567dfbcdedf.r2.dev";
-const WORKER_API = "https://quiz-api.jonathantate-ent.workers.dev";
+const WORKER_API = "https://quiz-api.jonathantate-ent.workers.dev"; // Your Cloudflare Worker endpoint
 
-let SPECIES = [];
-let SPECIES_DATA = [];
-let SPECIES_FAMILY = [];
-let COMMON_TO_SCI = {};
-let SCI_TO_COMMON = {};
+let masterSpecies = [];       // Full records from ./data/species.json
+let activeSpeciesPool = [];   // Filtered or selected subset used for quizzes
+let selectedIds = new Set();  // Set of active selected species IDs
+let filteredSpecies = [];     // Currently displayed list in search modal
+let fuseInstance = null;
 
-const FAMILIES = [
-  { num: 1, name: "Adoxaceae", count: 3 }, { num: 2, name: "Altingiaceae", count: 1 },
-  { num: 3, name: "Anacardiaceae", count: 4 }, { num: 4, name: "Annonaceae", count: 1 },
-  { num: 5, name: "Apocynaceae", count: 1 }, { num: 6, name: "Aquifoliaceae", count: 3 },
-  { num: 7, name: "Araliaceae", count: 3 }, { num: 8, name: "Berberidaceae", count: 1 },
-  { num: 9, name: "Betulaceae", count: 11 }, { num: 10, name: "Bignoniaceae", count: 1 },
-  { num: 11, name: "Caesalpiniaceae", count: 3 }, { num: 12, name: "Cannabaceae", count: 1 },
-  { num: 13, name: "Caprifoliaceae", count: 2 }, { num: 14, name: "Celastraceae", count: 2 },
-  { num: 15, name: "Cornaceae", count: 5 }, { num: 16, name: "Cupressaceae", count: 4 },
-  { num: 17, name: "Ebenaceae", count: 1 }, { num: 18, name: "Ericaceae", count: 9 },
-  { num: 19, name: "Fabaceae", count: 5 }, { num: 20, name: "Fagaceae", count: 17 },
-  { num: 21, name: "Ginkgoaceae", count: 1 }, { num: 22, name: "Hamamelidaceae", count: 1 },
-  { num: 23, name: "Juglandaceae", count: 7 }, { num: 24, name: "Lauraceae", count: 2 },
-  { num: 25, name: "Lythraceae", count: 1 }, { num: 26, name: "Magnoliaceae", count: 4 },
-  { num: 27, name: "Mimosaceae", count: 1 }, { num: 28, name: "Moraceae", count: 2 },
-  { num: 29, name: "Nyssaceae", count: 1 }, { num: 30, name: "Oleaceae", count: 3 },
-  { num: 32, name: "Paulowniaceae", count: 1 }, { num: 33, name: "Pinaceae", count: 16 },
-  { num: 34, name: "Platanaceae", count: 1 }, { num: 35, name: "Rosaceae", count: 14 },
-  { num: 36, name: "Salicaceae", count: 7 }, { num: 37, name: "Sapindaceae", count: 10 },
-  { num: 38, name: "Simaroubaceae", count: 1 }, { num: 39, name: "Taxaceae", count: 1 },
-  { num: 40, name: "Tiliaceae", count: 2 }, { num: 41, name: "Ulmaceae", count: 3 },
-  { num: 42, name: "Vitaceae", count: 2 }, { num: 43, name: "Grossulariaceae", count: 1 },
-  { num: 44, name: "Myricaceae", count: 1 }, { num: 45, name: "Hydrangeaceae", count: 1 },
-  { num: 46, name: "Smilacaceae", count: 1 }, { num: 47, name: "Staphyleaceae", count: 1 },
-  { num: 48, name: "Thymelaeaceae", count: 1 }, { num: 49, name: "Elaeagnaceae", count: 1 },
-  { num: 50, name: "Polygonaceae", count: 1 }
+const HARDCODED_PRESETS = [
+  { id: 'quizTest1Toggle', sci: ["asimina triloba","ilex opaca","robinia pseudoacacia","juglans nigra","sassafras albidum","lindera benzoin","liriodendron tulipifera","fraxinus americana","paulownia tomentosa","pinus strobus","tsuga canadensis","platanus occidentalis","acer saccharum","acer negundo","aesculus flava","parthenocissus quinquefolia","toxicodendron radicans","carpinus caroliniana","elaeagnus umbellate","reynoutria japonica"] },
+  { id: 'quizTest2Toggle', sci: ["cercis canadensis","quercus alba","quercus montana","quercus coccinea","quercus marilandica","prunus serotina","pyrus calleryana","acer platanoides","ailanthus altissima","tilia americana"] },
+  { id: 'quizTest3Toggle', sci: ["quercus rubra","magnolia acuminata","acer pensylvanicum","cornus florida","acer rubrum","quercus velutina","smilax spp.","carya cordiformis","berbis spp."] },
+  { id: 'quizTest4Toggle', sci: ["nyssa sylvatica","fagus grandifolia","pinus rigida","pinus virginiana","oxydendrum arboreum","quercus falcata","juniperus virginiana","albizia julibrissin","quercus stellata","diospyros virginiana"] },
+  { id: 'quizTest5Toggle', sci: ["malus pumila","pinus taeda","quercus phellos","hedera helix","catalpa speciosa","cornus kousa","carya glabra var.glabra","fraxinus pennsylvanica","rubus phoenicolasius","ulmus rubra","rosa multiflora","cupressocyparis leylandii","acer saccharinum"] }
 ];
 
-const QUIZ_TEST_1_SCI = ["asimina triloba","ilex opaca","robinia pseudoacacia","juglans nigra","sassafras albidum","lindera benzoin","liriodendron tulipifera","fraxinus americana","paulownia tomentosa","pinus strobus","tsuga canadensis","platanus occidentalis","acer saccharum","acer negundo","aesculus flava","parthenocissus quinquefolia","toxicodendron radicans","carpinus caroliniana","elaeagnus umbellate","reynoutria japonica"];
-const QUIZ_TEST_2_SCI = ["cercis canadensis","quercus alba","quercus montana","quercus coccinea","quercus marilandica","prunus serotina","pyrus calleryana","acer platanoides","ailanthus altissima","tilia americana"];
-const QUIZ_TEST_3_SCI = ["quercus rubra","magnolia acuminata","acer pensylvanicum","cornus florida","acer rubrum","quercus velutina","smilax spp.","carya cordiformis","berbis spp."];
-const QUIZ_TEST_4_SCI = ["nyssa sylvatica","fagus grandifolia","pinus rigida","pinus virginiana","oxydendrum arboreum","quercus falcata","juniperus virginiana","albizia julibrissin","quercus stellata","diospyros virginiana"];
-const QUIZ_TEST_5_SCI = ["malus pumila","pinus taeda","quercus phellos","hedera helix","catalpa speciosa","cornus kousa","carya glabra var.glabra","fraxinus pennsylvanica","rubus phoenicolasius","ulmus rubra","rosa multiflora","cupressocyparis leylandii","acer saccharinum"];
-
+// Quiz Configurations
 let TIME_LIMIT = 15;
 let TOTAL = 10;
 let NUM_CHOICES = 4;
-let selectedSpecies = [];
 let playerName = '';
 let isGuest = false;
 
@@ -62,12 +35,11 @@ let selectedStyles = ['quiz'];
 let currentMode = 'sci-to-common';
 let typeAnswerMode = false;
 
+// In-Game Variables
 let score = 0;
 let streak = 0;
 let qIndex = 0;
 let currentCorrect = '';
-let currentPair = null;
-let currentSpeciesObj = null;
 let questions = [];
 let timerId = null;
 let timeLeft = TIME_LIMIT;
@@ -79,43 +51,43 @@ let startScreen, quizScreen, endScreen, stats, promptEl, promptLabel;
 let optionsEl, feedback, nextBtn, progressBar, timerBar, timerText, speciesImg;
 let imgPlaceholder, imgLoading, spinBtn, settingsSidebar, sidebarBackdrop;
 
-document.addEventListener('DOMContentLoaded', loadDataAndInit);
+document.addEventListener('DOMContentLoaded', initApplication);
 
-async function loadDataAndInit() {
+async function initApplication() {
   cacheDOM();
   initSidebar();
-  initControls();
+  initQuizControls();
+  initSpeciesModal();
   initImageResizer();
   fetchGlobalLeaderboard();
 
   try {
     const res = await fetch('./data/species.json');
     if (!res.ok) throw new Error("Could not find ./data/species.json");
-    SPECIES_DATA = await res.json();
+    const rawData = await res.json();
     
-    SPECIES = [];
-    SPECIES_FAMILY = [];
-    COMMON_TO_SCI = {};
-    SCI_TO_COMMON = {};
+    // Normalize species schema
+    masterSpecies = rawData.map((item, idx) => ({
+      id: item.id !== undefined ? String(item.id) : String(idx + 1),
+      common: item.common || "Unknown Common Name",
+      scientific: item.scientific || "Unknown Species",
+      family: item.family || (item.familyNum ? `Family #${item.familyNum}` : "Pinaceae"),
+      spinzam_url: item.spinzam_url || null
+    }));
 
-    SPECIES_DATA.forEach(item => {
-      const c = item.common || "Unknown";
-      const s = item.scientific || "Unknown";
-      SPECIES.push([c, s]);
-      SPECIES_FAMILY.push(item.familyNum || 1);
-      COMMON_TO_SCI[c] = s;
-      SCI_TO_COMMON[s] = c;
-    });
+    // Start with all species selected
+    masterSpecies.forEach(sp => selectedIds.add(sp.id));
+    filteredSpecies = [...masterSpecies];
+    activeSpeciesPool = [...masterSpecies];
 
-    initFamilySelect();
+    initFuzzySearch();
+    renderSpeciesGrid();
+    renderFamilySidebar();
+    fetchCloudPresets();
+    updatePoolStatus();
   } catch (err) {
-    console.warn("Using preset fallback species:", err);
-    QUIZ_TEST_1_SCI.forEach(sci => {
-      const words = sci.split(' ');
-      const c = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      SPECIES.push([c, sci]);
-      SPECIES_FAMILY.push(1);
-    });
+    console.error("Species data loading failed:", err);
+    document.getElementById('poolStatusSubtitle').textContent = "Failed to load database. Check console.";
   }
 }
 
@@ -140,6 +112,282 @@ function cacheDOM() {
   sidebarBackdrop = document.getElementById('sidebarBackdrop');
 }
 
+/* ============================================================================
+   FORGIVING FUZZY SEARCH (FUSE.JS) & MODAL SELECTION
+============================================================================ */
+
+function initFuzzySearch() {
+  const options = {
+    keys: [
+      { name: 'common', weight: 0.5 },
+      { name: 'scientific', weight: 0.35 },
+      { name: 'family', weight: 0.15 }
+    ],
+    threshold: 0.42,       // Forgiving typo threshold
+    distance: 100,
+    minMatchCharLength: 2,
+    ignoreLocation: true
+  };
+
+  fuseInstance = new Fuse(masterSpecies, options);
+}
+
+function initSpeciesModal() {
+  const modal = document.getElementById('speciesModal');
+  const backdrop = document.getElementById('speciesModalBackdrop');
+  const openBtn = document.getElementById('openSpeciesModalBtn');
+  const closeBtn = document.getElementById('closeSpeciesModalBtn');
+  const searchInput = document.getElementById('speciesSearchInput');
+  const clearBtn = document.getElementById('clearSearchBtn');
+
+  const openModal = () => {
+    modal.classList.remove('hidden');
+    backdrop.classList.remove('hidden');
+    renderSpeciesGrid();
+  };
+
+  const closeModal = () => {
+    modal.classList.add('hidden');
+    backdrop.classList.add('hidden');
+    syncActivePool();
+  };
+
+  openBtn?.addEventListener('click', openModal);
+  closeBtn?.addEventListener('click', closeModal);
+  backdrop?.addEventListener('click', closeModal);
+
+  // Debounced search typing
+  let debounceTimer;
+  searchInput?.addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const q = e.target.value.trim();
+      if (!q) {
+        filteredSpecies = [...masterSpecies];
+      } else {
+        filteredSpecies = fuseInstance.search(q).map(res => res.item);
+      }
+      renderSpeciesGrid();
+    }, 120);
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    if (searchInput) searchInput.value = '';
+    filteredSpecies = [...masterSpecies];
+    renderSpeciesGrid();
+  });
+
+  // Batch actions
+  document.getElementById('selectAllFilteredBtn')?.addEventListener('click', () => {
+    filteredSpecies.forEach(sp => selectedIds.add(sp.id));
+    updatePickerUI();
+  });
+
+  document.getElementById('deselectAllBtn')?.addEventListener('click', () => {
+    selectedIds.clear();
+    updatePickerUI();
+  });
+
+  document.getElementById('invertSelectionBtn')?.addEventListener('click', () => {
+    masterSpecies.forEach(sp => {
+      if (selectedIds.has(sp.id)) selectedIds.delete(sp.id);
+      else selectedIds.add(sp.id);
+    });
+    updatePickerUI();
+  });
+
+  // Cloudflare Presets
+  document.getElementById('savePresetCloudBtn')?.addEventListener('click', savePresetToCloudflare);
+  document.getElementById('loadPresetCloudBtn')?.addEventListener('click', loadPresetFromCloudflare);
+}
+
+function renderSpeciesGrid() {
+  const grid = document.getElementById('speciesResultGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  if (filteredSpecies.length === 0) {
+    grid.innerHTML = '<div class="no-matches">No species found matching query.</div>';
+    return;
+  }
+
+  // Slice DOM nodes to maintain smooth scrolling on large sets
+  const displaySlice = filteredSpecies.slice(0, 250);
+
+  displaySlice.forEach(sp => {
+    const label = document.createElement('label');
+    label.className = 'species-card-label';
+    const checked = selectedIds.has(sp.id);
+
+    label.innerHTML = `
+      <input type="checkbox" data-id="${sp.id}" ${checked ? 'checked' : ''}>
+      <div class="name-block">
+        <span class="common-txt">${sp.common}</span>
+        <span class="sci-txt"><em>${sp.scientific}</em> (${sp.family})</span>
+      </div>
+    `;
+
+    label.querySelector('input').addEventListener('change', (e) => {
+      if (e.target.checked) selectedIds.add(sp.id);
+      else selectedIds.delete(sp.id);
+      updateBadge();
+    });
+
+    grid.appendChild(label);
+  });
+
+  if (filteredSpecies.length > 250) {
+    const hint = document.createElement('div');
+    hint.className = 'search-more-hint';
+    hint.textContent = `Showing 250 of ${filteredSpecies.length} matches. Type more characters to narrow results.`;
+    grid.appendChild(hint);
+  }
+
+  updateBadge();
+}
+
+function renderFamilySidebar() {
+  const container = document.getElementById('familyListItems');
+  if (!container) return;
+
+  const familyGroups = {};
+  masterSpecies.forEach(sp => {
+    familyGroups[sp.family] = familyGroups[sp.family] || [];
+    familyGroups[sp.family].push(sp.id);
+  });
+
+  container.innerHTML = '';
+  Object.keys(familyGroups).sort().forEach(fam => {
+    const ids = familyGroups[fam];
+    const row = document.createElement('div');
+    row.className = 'fam-sidebar-item';
+    row.innerHTML = `
+      <span class="fam-name" title="${fam}">${fam} (${ids.length})</span>
+      <button type="button" class="fam-btn-add" title="Add all in ${fam}">+ All</button>
+    `;
+
+    row.querySelector('.fam-name').addEventListener('click', () => {
+      const searchInput = document.getElementById('speciesSearchInput');
+      if (searchInput) searchInput.value = fam;
+      filteredSpecies = fuseInstance.search(fam).map(r => r.item);
+      renderSpeciesGrid();
+    });
+
+    row.querySelector('.fam-btn-add').addEventListener('click', (e) => {
+      e.stopPropagation();
+      ids.forEach(id => selectedIds.add(id));
+      updatePickerUI();
+    });
+
+    container.appendChild(row);
+  });
+}
+
+function updatePickerUI() {
+  renderSpeciesGrid();
+  updateBadge();
+}
+
+function updateBadge() {
+  const badge = document.getElementById('selectedCountBadge');
+  if (badge) badge.textContent = `${selectedIds.size} of ${masterSpecies.length} selected`;
+}
+
+function syncActivePool() {
+  activeSpeciesPool = masterSpecies.filter(sp => selectedIds.has(sp.id));
+  updatePoolStatus();
+}
+
+function updatePoolStatus() {
+  const status = document.getElementById('poolStatusSubtitle');
+  if (status) {
+    status.textContent = `${activeSpeciesPool.length} of ${masterSpecies.length} Species Selected for Testing`;
+  }
+}
+
+/* ============================================================================
+   CLOUDFLARE KV PRESET INTEGRATION
+============================================================================ */
+
+async function savePresetToCloudflare() {
+  if (selectedIds.size === 0) {
+    alert("Select at least 1 species to create a preset.");
+    return;
+  }
+
+  const titleInput = document.getElementById('presetTitleInput');
+  const authorInput = document.getElementById('presetAuthorInput');
+  const title = (titleInput?.value || '').trim() || `Preset (${selectedIds.size} species)`;
+  const author = (authorInput?.value || '').trim() || 'Anonymous';
+
+  const payload = {
+    title,
+    author,
+    species: Array.from(selectedIds)
+  };
+
+  try {
+    const res = await fetch(`${WORKER_API}/api/presets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });[cite: 2, 3]
+    const data = await res.json();
+    if (data.success) {
+      alert(`✓ Preset "${title}" saved to Cloudflare!`);
+      if (titleInput) titleInput.value = '';
+      fetchCloudPresets();
+    }
+  } catch (err) {
+    console.error("Cloudflare preset save error:", err);
+    alert("Failed to save to Cloudflare Worker. Check endpoint URL.");
+  }
+}
+
+async function fetchCloudPresets() {
+  const dropdown = document.getElementById('cloudPresetDropdown');
+  if (!dropdown) return;
+
+  try {
+    const res = await fetch(`${WORKER_API}/api/presets`);[cite: 2, 3]
+    if (!res.ok) return;
+    const presets = await res.json();
+
+    dropdown.innerHTML = '<option value="">-- Load from Cloudflare --</option>';
+    presets.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.title} (${p.species.length} spp) — ${p.author}`;
+      opt.dataset.species = JSON.stringify(p.species);
+      dropdown.appendChild(opt);
+    });
+  } catch (err) {
+    console.warn("Could not retrieve Cloudflare presets:", err);
+  }
+}
+
+function loadPresetFromCloudflare() {
+  const dropdown = document.getElementById('cloudPresetDropdown');
+  const selOpt = dropdown?.options[dropdown.selectedIndex];
+  if (!selOpt || !selOpt.dataset.species) {
+    alert("Choose a preset from the dropdown first.");
+    return;
+  }
+
+  try {
+    const ids = JSON.parse(selOpt.dataset.species);
+    selectedIds = new Set(ids.map(String));
+    updatePickerUI();
+    alert(`Loaded "${selOpt.textContent}"`);
+  } catch (e) {
+    console.error("Failed to parse preset payload:", e);
+  }
+}
+
+/* ============================================================================
+   QUIZ LOGIC & WORKFLOW
+============================================================================ */
+
 function initSidebar() {
   const openSidebar = () => {
     settingsSidebar.classList.add('open');
@@ -156,7 +404,7 @@ function initSidebar() {
   sidebarBackdrop?.addEventListener('click', closeSidebar);
 }
 
-function initControls() {
+function initQuizControls() {
   // Mode selection
   document.querySelectorAll('#modeSelect .mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -168,7 +416,7 @@ function initControls() {
     });
   });
 
-  // Play style
+  // Play styles (MC / Typing)
   const quizBtn = document.getElementById('playStyleQuiz');
   const typeBtn = document.getElementById('playStyleTyping');
   const toggleStyle = (btn) => {
@@ -181,17 +429,18 @@ function initControls() {
   quizBtn?.addEventListener('click', () => toggleStyle(quizBtn));
   typeBtn?.addEventListener('click', () => toggleStyle(typeBtn));
 
-  // Count buttons
+  // Question count
   document.querySelectorAll('#countSelect .count-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#countSelect .count-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       TOTAL = parseInt(btn.dataset.count, 10);
-      document.getElementById('startBtn').textContent = `Start ${TOTAL}-Question Quiz (Record Score)`;
+      const startBtn = document.getElementById('startBtn');
+      if (startBtn) startBtn.textContent = `Start ${TOTAL}-Question Quiz`;
     });
   });
 
-  // Choice buttons
+  // Choices count
   document.querySelectorAll('#choicesSelect .choice-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#choicesSelect .choice-btn').forEach(b => b.classList.remove('active'));
@@ -206,12 +455,35 @@ function initControls() {
     document.getElementById('timeLimitLabel').textContent = TIME_LIMIT + 's';
   });
 
-  // Start Buttons (Mandatory Name vs. Guest Handling)
+  // Hardcoded presets
+  HARDCODED_PRESETS.forEach(p => {
+    document.getElementById(p.id)?.addEventListener('change', () => {
+      const want = new Set();
+      HARDCODED_PRESETS.forEach(pr => {
+        if (document.getElementById(pr.id)?.checked) {
+          pr.sci.forEach(s => want.add(s.toLowerCase().trim()));
+        }
+      });
+
+      if (want.size > 0) {
+        selectedIds.clear();
+        masterSpecies.forEach(sp => {
+          if (want.has(sp.scientific.toLowerCase().trim())) selectedIds.add(sp.id);
+        });
+      } else {
+        masterSpecies.forEach(sp => selectedIds.add(sp.id));
+      }
+      syncActivePool();
+      updateBadge();
+    });
+  });
+
+  // Launch buttons
   document.getElementById('startBtn')?.addEventListener('click', () => {
     const input = document.getElementById('playerName');
     const entered = (input?.value || '').trim();
     if (!entered) {
-      alert("Please enter a player name to save your score to the global leaderboard, or click 'Play as Guest'!");
+      alert("Please enter a player name to record your score, or choose 'Play as Guest'!");
       input?.focus();
       return;
     }
@@ -230,7 +502,7 @@ function initControls() {
     const input = document.getElementById('playerName');
     playerName = (input?.value || '').trim() || 'Champion';
     isGuest = false;
-    TOTAL = SPECIES.length;
+    TOTAL = activeSpeciesPool.length;
     launchGame();
   });
 
@@ -262,83 +534,6 @@ function initControls() {
   });
 }
 
-function initFamilySelect() {
-  const list = document.getElementById('familyCheckList');
-  const summary = document.getElementById('familySummary');
-  if (!list) return;
-  list.innerHTML = '';
-
-  FAMILIES.forEach(f => {
-    const block = document.createElement('div');
-    block.style.padding = '4px 0';
-    block.innerHTML = `<label class="chk-label" style="font-size:0.8rem;">
-      <input type="checkbox" class="family-cb" data-fam="${f.num}"> ${f.num}. ${f.name} (${f.count})
-    </label>`;
-    list.appendChild(block);
-  });
-
-  document.getElementById('familyAllBtn')?.addEventListener('click', () => {
-    selectedSpecies = [];
-    document.querySelectorAll('.family-cb').forEach(c => c.checked = false);
-    if (summary) summary.textContent = `All species active (${SPECIES.length})`;
-  });
-
-  const presets = [
-    { id: 'quizTest1Toggle', sci: QUIZ_TEST_1_SCI },
-    { id: 'quizTest2Toggle', sci: QUIZ_TEST_2_SCI },
-    { id: 'quizTest3Toggle', sci: QUIZ_TEST_3_SCI },
-    { id: 'quizTest4Toggle', sci: QUIZ_TEST_4_SCI },
-    { id: 'quizTest5Toggle', sci: QUIZ_TEST_5_SCI }
-  ];
-
-  presets.forEach(p => {
-    document.getElementById(p.id)?.addEventListener('change', () => {
-      const want = new Set();
-      presets.forEach(pr => {
-        if (document.getElementById(pr.id)?.checked) {
-          pr.sci.forEach(s => want.add(s.toLowerCase().trim()));
-        }
-      });
-      if (want.size > 0) {
-        const matches = [];
-        SPECIES.forEach((pair, idx) => {
-          if (want.has(pair[1].toLowerCase().trim())) matches.push(idx);
-        });
-        selectedSpecies = matches;
-        if (summary) summary.textContent = `${matches.length} species selected (Preset filter active)`;
-      } else {
-        selectedSpecies = [];
-        if (summary) summary.textContent = `All species active (${SPECIES.length})`;
-      }
-    });
-  });
-}
-
-function initImageResizer() {
-  const handle = document.getElementById('imgResizeHandle');
-  const wrap = document.getElementById('imageWrap');
-  if (!handle || !wrap) return;
-
-  let startY, startH;
-  const onPointerDown = (e) => {
-    startY = e.clientY || (e.touches && e.touches[0].clientY);
-    startH = wrap.offsetHeight;
-    document.documentElement.addEventListener('pointermove', onPointerMove);
-    document.documentElement.addEventListener('pointerup', onPointerUp);
-    e.preventDefault();
-  };
-  const onPointerMove = (e) => {
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-    const newH = Math.max(90, Math.min(500, startH + (clientY - startY)));
-    wrap.style.height = `${newH}px`;
-  };
-  const onPointerUp = () => {
-    document.documentElement.removeEventListener('pointermove', onPointerMove);
-    document.documentElement.removeEventListener('pointerup', onPointerUp);
-  };
-  handle.addEventListener('pointerdown', onPointerDown);
-}
-
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -349,13 +544,13 @@ function shuffle(arr) {
 }
 
 function launchGame() {
-  const pool = selectedSpecies.length ? selectedSpecies.map(i => SPECIES[i]) : SPECIES.slice();
-  if (!pool.length) {
-    alert("Please select at least one species or family in Settings!");
+  syncActivePool();
+  if (activeSpeciesPool.length === 0) {
+    alert("Your species selection is empty! Pick at least 2 species in the Species Picker.");
     return;
   }
 
-  questions = shuffle(pool).slice(0, Math.min(TOTAL, pool.length));
+  questions = shuffle(activeSpeciesPool).slice(0, Math.min(TOTAL, activeSpeciesPool.length));
   TOTAL = questions.length;
   qIndex = 0;
   score = 0;
@@ -380,42 +575,32 @@ function showQuestion() {
   const activeStyle = selectedStyles[Math.floor(Math.random() * selectedStyles.length)] || 'quiz';
   typeAnswerMode = (activeStyle === 'typing');
 
-  const pair = questions[qIndex];
-  currentPair = pair;
-  currentSpeciesObj = SPECIES_DATA.find(s => s.scientific && s.scientific.toLowerCase() === pair[1].toLowerCase()) || null;
+  const sp = questions[qIndex];
 
   if (currentMode === 'common-to-sci') {
     promptLabel.textContent = 'Scientific Name';
-    promptEl.textContent = pair[0];
-    currentCorrect = pair[1];
+    promptEl.textContent = sp.common;
+    currentCorrect = sp.scientific;
   } else if (currentMode === 'family') {
     promptLabel.textContent = 'Botanical Family';
-    promptEl.textContent = `${pair[0]} (${pair[1]})`;
-    const fIdx = SPECIES.findIndex(p => p[0] === pair[0]);
-    const fNum = SPECIES_FAMILY[fIdx] || 1;
-    const fObj = FAMILIES.find(f => f.num === fNum);
-    currentCorrect = fObj ? `${fObj.num}. ${fObj.name}` : 'Pinaceae';
+    promptEl.textContent = `${sp.common} (${sp.scientific})`;
+    currentCorrect = sp.family;
   } else {
     promptLabel.textContent = 'Common Name';
-    promptEl.textContent = pair[1];
-    currentCorrect = pair[0];
+    promptEl.textContent = sp.scientific;
+    currentCorrect = sp.common;
   }
 
   document.getElementById('qNum').textContent = qIndex + 1;
   document.getElementById('totalQ').textContent = TOTAL;
   progressBar.style.width = ((qIndex / TOTAL) * 100) + '%';
 
-  // 3D Turntable Scrubber Link
   if (spinBtn) {
-    if (currentSpeciesObj && currentSpeciesObj.spinzam_url) {
+    if (sp.spinzam_url) {
       spinBtn.classList.remove('hidden');
       spinBtn.onclick = () => {
         document.getElementById('imageSlot').innerHTML = `
-          <iframe src="${currentSpeciesObj.spinzam_url}" 
-                  width="100%" height="100%" 
-                  frameborder="0" scrolling="no" 
-                  style="border:none;" allowfullscreen>
-          </iframe>`;
+          <iframe src="${sp.spinzam_url}" width="100%" height="100%" frameborder="0" scrolling="no" style="border:none;" allowfullscreen></iframe>`;
       };
     } else {
       spinBtn.classList.add('hidden');
@@ -438,13 +623,11 @@ function showQuestion() {
     optionsEl.classList.remove('hidden');
 
     let choices = [currentCorrect];
-    if (currentMode === 'family') {
-      const famPool = FAMILIES.map(f => `${f.num}. ${f.name}`).filter(f => f !== currentCorrect);
-      shuffle(famPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
-    } else {
-      const distractorPool = SPECIES.map(p => (currentMode === 'common-to-sci' ? p[1] : p[0])).filter(n => n !== currentCorrect);
-      shuffle(distractorPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
-    }
+    const distractorPool = masterSpecies
+      .map(item => currentMode === 'common-to-sci' ? item.scientific : (currentMode === 'family' ? item.family : item.common))
+      .filter((v, i, self) => v !== currentCorrect && self.indexOf(v) === i);
+
+    shuffle(distractorPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
 
     shuffle(choices).forEach(opt => {
       const btn = document.createElement('button');
@@ -455,7 +638,7 @@ function showQuestion() {
     });
   }
 
-  loadPhoto(pair);
+  loadPhoto(sp);
   startTimer();
 }
 
@@ -471,9 +654,9 @@ function selectAnswer(btn, chosen) {
   stopTimer();
 
   optionsEl.querySelectorAll('.option').forEach(o => o.disabled = true);
-  const correct = chosen.toLowerCase().trim() === currentCorrect.toLowerCase().trim();
+  const isMatch = chosen.toLowerCase().trim() === currentCorrect.toLowerCase().trim();
 
-  if (correct) {
+  if (isMatch) {
     btn.classList.add('correct');
     score++;
     streak++;
@@ -519,11 +702,10 @@ async function endQuiz() {
 
   if (msgEl) msgEl.textContent = `Final Score: ${score}/${TOTAL} (${pct}%)`;
 
-  // CLOUDFLARE KV PERSISTENCE
   if (isGuest) {
     if (kvNotice) {
       kvNotice.className = "kv-notice guest";
-      kvNotice.textContent = "Played as Guest: Score was not recorded to the Cloudflare Global Leaderboard.";
+      kvNotice.textContent = "Played as Guest: Score not recorded to Cloudflare Global Hall of Fame.";
       kvNotice.classList.remove('hidden');
     }
   } else if (WORKER_API) {
@@ -536,7 +718,7 @@ async function endQuiz() {
     try {
       const payload = {
         player: playerName,
-        score: score,
+        score,
         total: TOTAL,
         mode: currentMode
       };
@@ -545,13 +727,11 @@ async function endQuiz() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
-      });
+      });[cite: 2, 3]
 
-      if (res.ok) {
-        if (kvNotice) {
-          kvNotice.className = "kv-notice success";
-          kvNotice.textContent = "✓ Score successfully recorded to Cloudflare Global Hall of Fame!";
-        }
+      if (res.ok && kvNotice) {
+        kvNotice.className = "kv-notice success";
+        kvNotice.textContent = "✓ Score recorded to Cloudflare Global Hall of Fame!";
       }
     } catch (e) {
       if (kvNotice) {
@@ -567,7 +747,7 @@ async function fetchGlobalLeaderboard() {
   if (!WORKER_API || !listEl) return;
 
   try {
-    const res = await fetch(`${WORKER_API}/api/leaderboard`);
+    const res = await fetch(`${WORKER_API}/api/leaderboard`);[cite: 2, 3]
     if (!res.ok) throw new Error("Leaderboard unreachable");
     const data = await res.json();
 
@@ -615,7 +795,7 @@ function startTimer() {
   }, 1000);
 }
 
-async function loadPhoto(pair) {
+async function loadPhoto(sp) {
   const slot = document.getElementById('imageSlot');
   if (slot && !slot.querySelector('#speciesImg')) {
     slot.innerHTML = `
@@ -635,10 +815,10 @@ async function loadPhoto(pair) {
   if (imgPlaceholder) imgPlaceholder.style.opacity = '0.4';
   if (imgLoading) imgLoading.classList.remove('hidden');
 
-  const commonSlug = pair[0].toLowerCase().replace(/[^a-z0-9]/g, '_');
-  const sciClean = pair[1].replace(/spp\.?/i, '').trim();
+  const commonSlug = sp.common.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const sciClean = sp.scientific.replace(/spp\.?/i, '').trim();
 
-  // Try Cloudflare R2 Diagnostic Asset
+  // Primary: Cloudflare R2
   const r2Url = `${CLOUDFLARE_R2_BASE}/${commonSlug}_image/${commonSlug}_leaf_image.jpg`;
   const imgTest = new Image();
   imgTest.src = r2Url;
@@ -652,11 +832,11 @@ async function loadPhoto(pair) {
   };
 
   imgTest.onerror = async () => {
-    // iNaturalist Dynamic Fallback
+    // Secondary: iNaturalist Dynamic Taxa Lookup
     try {
-      const res = await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sciClean)}&per_page=1`);
-      const data = await res.json();
-      const taxon = data.results?.[0];
+      const res = await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sciClean)}&per_page=1`);[cite: 1]
+      const data = await res.json();[cite: 1]
+      const taxon = data.results?.[0];[cite: 1]
       if (taxon?.default_photo?.medium_url && speciesImg) {
         speciesImg.src = taxon.default_photo.medium_url;
         if (imgLoading) imgLoading.classList.add('hidden');
@@ -672,4 +852,29 @@ async function loadPhoto(pair) {
 function revealImage() {
   if (speciesImg && speciesImg.src) speciesImg.classList.add('revealed');
   if (imgPlaceholder) imgPlaceholder.style.opacity = '0';
+}
+
+function initImageResizer() {
+  const handle = document.getElementById('imgResizeHandle');
+  const wrap = document.getElementById('imageWrap');
+  if (!handle || !wrap) return;
+
+  let startY, startH;
+  const onPointerDown = (e) => {
+    startY = e.clientY || (e.touches && e.touches[0].clientY);
+    startH = wrap.offsetHeight;
+    document.documentElement.addEventListener('pointermove', onPointerMove);
+    document.documentElement.addEventListener('pointerup', onPointerUp);
+    e.preventDefault();
+  };
+  const onPointerMove = (e) => {
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const newH = Math.max(90, Math.min(500, startH + (clientY - startY)));
+    wrap.style.height = `${newH}px`;
+  };
+  const onPointerUp = () => {
+    document.documentElement.removeEventListener('pointermove', onPointerMove);
+    document.documentElement.removeEventListener('pointerup', onPointerUp);
+  };
+  handle.addEventListener('pointerdown', onPointerDown);
 }
