@@ -1,11 +1,11 @@
 /* ============================================================================
-   DENDROLOGY MASTER QUIZ ENGINE — v1.0.16
-   - Live Cloudflare Worker KV Leaderboard Sync
-   - Direct Cloudflare R2 Diagnostic Asset Pipeline
-   - Multi-mode selection (Sci->Common, Common->Sci, Family)
-   - Multi-input selection (Multiple Choice, Typing)
-   - Full Lab Presets #1 - #5 active
-   - Draggable image resize handle & Spinzam 3D scan support
+   DENDROLOGY MASTER QUIZ ENGINE — v1.0.17
+   - Immediate responsive start (no async freeze)
+   - Global window.startQuiz binding for buttons
+   - Cloudflare KV Leaderboard & R2 image support
+   - Multi-mode and multi-input options
+   - Working Quiz Test #1 - #5 lab presets
+   - Touch and mouse draggable photo resizer
 ============================================================================ */
 
 const CLOUDFLARE_R2_BASE = "https://pub-7c8f1ea1e424248a09ee567dfbcdedf.r2.dev";
@@ -57,8 +57,8 @@ let NUM_CHOICES = 4;
 let selectedSpecies = [];
 let playerName = 'Jonathan';
 let isGuest = false;
+let isUltimate = false;
 
-// Selection State
 let selectedModes = ['sci-to-common'];
 let selectedStyles = ['quiz'];
 let currentMode = 'sci-to-common';
@@ -76,7 +76,7 @@ let timeLeft = TIME_LIMIT;
 let answered = false;
 let hintUsedThisQ = false;
 
-// DOM Elements
+// DOM Elements Cache
 let startScreen, quizScreen, endScreen, stats, promptEl, promptLabel;
 let optionsEl, feedback, nextBtn, progressBar, timerBar, timerText, speciesImg;
 let imgPlaceholder, imgLoading, spinBtn;
@@ -120,8 +120,13 @@ function initImageResizer() {
 }
 
 async function loadDataAndInit() {
+  cacheDOM();
+  initSettingsAndPanels();
+  initImageResizer();
+
   try {
     const res = await fetch('./data/species.json');
+    if (!res.ok) throw new Error("Could not load ./data/species.json");
     SPECIES_DATA = await res.json();
     
     SPECIES = [];
@@ -130,23 +135,29 @@ async function loadDataAndInit() {
     SCI_TO_COMMON = {};
 
     SPECIES_DATA.forEach(item => {
-      SPECIES.push([item.common, item.scientific]);
+      const c = item.common || "Unknown";
+      const s = item.scientific || "Unknown";
+      SPECIES.push([c, s]);
       SPECIES_FAMILY.push(item.familyNum || 1);
-      COMMON_TO_SCI[item.common] = item.scientific;
-      SCI_TO_COMMON[item.scientific] = item.common;
+      COMMON_TO_SCI[c] = s;
+      SCI_TO_COMMON[s] = c;
     });
 
-    initUISelectors();
     initFamilySelect();
-    initSettingsAndPanels();
-    initImageResizer();
     fetchLeaderboard();
   } catch (err) {
-    console.error("Failed loading data/species.json:", err);
+    console.warn("Falling back to internal presets:", err);
+    // Safe built-in fallback to ensure instant playability
+    QUIZ_TEST_1_SCI.forEach(sci => {
+      const words = sci.split(' ');
+      const c = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      SPECIES.push([c, sci]);
+      SPECIES_FAMILY.push(1);
+    });
   }
 }
 
-function initUISelectors() {
+function cacheDOM() {
   startScreen = document.getElementById('startScreen');
   quizScreen = document.getElementById('quizScreen');
   endScreen = document.getElementById('endScreen');
@@ -238,11 +249,15 @@ function initSettingsAndPanels() {
     });
   });
 
+  document.getElementById('startBtn')?.addEventListener('click', () => window.startQuiz(false));
+  document.getElementById('guestBtn')?.addEventListener('click', () => window.startQuiz(true));
+  document.getElementById('ultimateBtn')?.addEventListener('click', () => window.startQuiz('ultimate'));
+
   nextBtn?.addEventListener('click', nextQuestion);
   document.getElementById('startOverBtn')?.addEventListener('click', () => window.startQuiz(false));
   document.getElementById('homeBtn')?.addEventListener('click', () => {
-    endScreen.classList.add('hidden');
-    startScreen.classList.remove('hidden');
+    endScreen?.classList.add('hidden');
+    startScreen?.classList.remove('hidden');
   });
 
   document.getElementById('hintBtn')?.addEventListener('click', () => {
@@ -252,9 +267,9 @@ function initSettingsAndPanels() {
 
   document.getElementById('cancelQuizBtn')?.addEventListener('click', () => {
     stopTimer();
-    quizScreen.classList.add('hidden');
-    stats.classList.add('hidden');
-    startScreen.classList.remove('hidden');
+    quizScreen?.classList.add('hidden');
+    stats?.classList.add('hidden');
+    startScreen?.classList.remove('hidden');
   });
 
   document.getElementById('typeSubmitBtn')?.addEventListener('click', handleTypedAnswer);
@@ -272,7 +287,7 @@ function initFamilySelect() {
   FAMILIES.forEach(f => {
     const block = document.createElement('div');
     block.style.padding = '4px 0';
-    block.innerHTML = `<label class="chk-label" style="font-size:0.85rem;">
+    block.innerHTML = `<label class="chk-label" style="font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;">
       <input type="checkbox" class="family-cb" data-fam="${f.num}"> ${f.num}. ${f.name} (${f.count})
     </label>`;
     list.appendChild(block);
@@ -324,30 +339,38 @@ function shuffle(arr) {
   return a;
 }
 
+// Globally bound start function
 window.startQuiz = function(modeArg) {
+  cacheDOM();
   isGuest = (modeArg === true);
+  isUltimate = (modeArg === 'ultimate');
   const nameInput = document.getElementById('playerName');
   playerName = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : (isGuest ? 'Guest' : 'Jonathan');
 
   const pool = selectedSpecies.length ? selectedSpecies.map(i => SPECIES[i]) : SPECIES.slice();
+  if (!pool.length) {
+    alert("Please select at least one species, family, or preset!");
+    return;
+  }
+
   questions = shuffle(pool).slice(0, Math.min(TOTAL, pool.length));
   TOTAL = questions.length;
   qIndex = 0;
   score = 0;
   streak = 0;
 
-  startScreen.classList.add('hidden');
-  endScreen.classList.add('hidden');
-  quizScreen.classList.remove('hidden');
-  stats.classList.remove('hidden');
+  startScreen?.classList.add('hidden');
+  endScreen?.classList.add('hidden');
+  quizScreen?.classList.remove('hidden');
+  stats?.classList.remove('hidden');
 
   showQuestion();
 };
 
 function showQuestion() {
-  feedback.classList.add('hidden');
-  nextBtn.classList.add('hidden');
-  optionsEl.innerHTML = '';
+  feedback?.classList.add('hidden');
+  nextBtn?.classList.add('hidden');
+  if (optionsEl) optionsEl.innerHTML = '';
   answered = false;
   hintUsedThisQ = false;
 
@@ -357,37 +380,41 @@ function showQuestion() {
 
   const pair = questions[qIndex];
   currentPair = pair;
-  currentSpeciesObj = SPECIES_DATA.find(s => s.scientific.toLowerCase() === pair[1].toLowerCase()) || null;
+  currentSpeciesObj = SPECIES_DATA.find(s => s.scientific && s.scientific.toLowerCase() === pair[1].toLowerCase()) || null;
 
   if (currentMode === 'common-to-sci') {
-    promptLabel.textContent = 'Scientific name';
-    promptEl.textContent = pair[0];
+    if (promptLabel) promptLabel.textContent = 'Scientific name';
+    if (promptEl) promptEl.textContent = pair[0];
     currentCorrect = pair[1];
   } else if (currentMode === 'family') {
-    promptLabel.textContent = 'Botanical Family';
-    promptEl.textContent = `${pair[0]} (${pair[1]})`;
+    if (promptLabel) promptLabel.textContent = 'Botanical Family';
+    if (promptEl) promptEl.textContent = `${pair[0]} (${pair[1]})`;
     currentCorrect = familyNameForPair(pair);
   } else {
-    promptLabel.textContent = 'Common name';
-    promptEl.textContent = pair[1];
+    if (promptLabel) promptLabel.textContent = 'Common name';
+    if (promptEl) promptEl.textContent = pair[1];
     currentCorrect = pair[0];
   }
 
-  document.getElementById('qNum').textContent = qIndex + 1;
-  document.getElementById('totalQ').textContent = TOTAL;
-  progressBar.style.width = ((qIndex / TOTAL) * 100) + '%';
+  const qNumEl = document.getElementById('qNum');
+  const totalQEl = document.getElementById('totalQ');
+  if (qNumEl) qNumEl.textContent = qIndex + 1;
+  if (totalQEl) totalQEl.textContent = TOTAL;
+  if (progressBar) progressBar.style.width = ((qIndex / TOTAL) * 100) + '%';
 
   if (spinBtn) {
     if (currentSpeciesObj && currentSpeciesObj.spinzam_url) {
       spinBtn.classList.remove('hidden');
       spinBtn.onclick = () => {
         const slot = document.getElementById('imageSlot');
-        slot.innerHTML = `
-          <iframe src="${currentSpeciesObj.spinzam_url}" 
-                  width="100%" height="100%" 
-                  frameborder="0" scrolling="no" 
-                  style="border:none;" allowfullscreen>
-          </iframe>`;
+        if (slot) {
+          slot.innerHTML = `
+            <iframe src="${currentSpeciesObj.spinzam_url}" 
+                    width="100%" height="100%" 
+                    frameborder="0" scrolling="no" 
+                    style="border:none;" allowfullscreen>
+            </iframe>`;
+        }
       };
     } else {
       spinBtn.classList.add('hidden');
@@ -398,16 +425,16 @@ function showQuestion() {
   const typeInput = document.getElementById('typeAnswerInput');
 
   if (typeAnswerMode) {
-    optionsEl.classList.add('hidden');
+    optionsEl?.classList.add('hidden');
     typeArea?.classList.remove('hidden');
     if (typeInput) {
       typeInput.value = '';
       typeInput.disabled = false;
-      setTimeout(() => typeInput.focus(), 50);
+      setTimeout(() => typeInput.focus(), 60);
     }
   } else {
     typeArea?.classList.add('hidden');
-    optionsEl.classList.remove('hidden');
+    optionsEl?.classList.remove('hidden');
 
     let choices = [currentCorrect];
     if (currentMode === 'family') {
@@ -423,7 +450,7 @@ function showQuestion() {
       btn.className = 'option';
       btn.textContent = opt;
       btn.addEventListener('click', () => selectAnswer(btn, opt));
-      optionsEl.appendChild(btn);
+      optionsEl?.appendChild(btn);
     });
   }
 
@@ -443,32 +470,38 @@ function selectAnswer(btn, chosen) {
   answered = true;
   stopTimer();
 
-  optionsEl.querySelectorAll('.option').forEach(o => o.disabled = true);
+  optionsEl?.querySelectorAll('.option').forEach(o => o.disabled = true);
   const correct = chosen.toLowerCase().trim() === currentCorrect.toLowerCase().trim();
 
   if (correct) {
-    btn.classList.add('correct');
+    if (btn) btn.classList.add('correct');
     score++;
     streak++;
-    feedback.textContent = '✓ Correct!';
-    feedback.className = 'feedback correct';
+    if (feedback) {
+      feedback.textContent = '✓ Correct!';
+      feedback.className = 'feedback correct';
+    }
   } else {
-    btn.classList.add('wrong');
+    if (btn) btn.classList.add('wrong');
     streak = 0;
-    optionsEl.querySelectorAll('.option').forEach(o => {
+    optionsEl?.querySelectorAll('.option').forEach(o => {
       if (o.textContent.toLowerCase().trim() === currentCorrect.toLowerCase().trim()) {
         o.classList.add('correct');
       }
     });
-    feedback.textContent = `✗ Wrong — Correct: ${currentCorrect}`;
-    feedback.className = 'feedback wrong';
+    if (feedback) {
+      feedback.textContent = `✗ Wrong — Correct: ${currentCorrect}`;
+      feedback.className = 'feedback wrong';
+    }
   }
 
-  feedback.classList.remove('hidden');
+  feedback?.classList.remove('hidden');
   revealImage();
-  nextBtn.classList.remove('hidden');
-  document.getElementById('score').textContent = score;
-  document.getElementById('streak').textContent = streak;
+  nextBtn?.classList.remove('hidden');
+  const scEl = document.getElementById('score');
+  const stEl = document.getElementById('streak');
+  if (scEl) scEl.textContent = score;
+  if (stEl) stEl.textContent = streak;
 }
 
 function nextQuestion() {
@@ -482,9 +515,9 @@ function nextQuestion() {
 
 async function endQuiz() {
   stopTimer();
-  quizScreen.classList.add('hidden');
-  stats.classList.add('hidden');
-  endScreen.classList.remove('hidden');
+  quizScreen?.classList.add('hidden');
+  stats?.classList.add('hidden');
+  endScreen?.classList.remove('hidden');
 
   const pct = Math.round((score / TOTAL) * 100) || 0;
   const msgEl = document.getElementById('endMsg');
@@ -492,10 +525,9 @@ async function endQuiz() {
     msgEl.textContent = `Final Score: ${score}/${TOTAL} (${pct}%)`;
   }
 
-  // Submit to Cloudflare Worker KV
+  // Background sync to Cloudflare Worker KV
   if (WORKER_API) {
     try {
-      console.log(`Submitting score to ${WORKER_API}/api/leaderboard...`);
       const payload = {
         player: playerName || "Jonathan",
         score: score,
@@ -503,17 +535,12 @@ async function endQuiz() {
         mode: currentMode || "sci-to-common"
       };
 
-      const res = await fetch(`${WORKER_API}/api/leaderboard`, {
+      fetch(`${WORKER_API}/api/leaderboard`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      console.log("Cloudflare save response:", data);
-      fetchLeaderboard();
-    } catch (err) {
-      console.error("Failed to push score to Cloudflare KV:", err);
-    }
+      }).then(() => fetchLeaderboard()).catch(() => {});
+    } catch (e) {}
   }
 }
 
@@ -537,15 +564,12 @@ async function fetchLeaderboard() {
         });
       }
     }
-  } catch (err) {
-    console.error("Could not fetch leaderboard:", err);
-  }
+  } catch (err) {}
 }
 
 function updateTimerDisplay() {
-  if (!timerText || !timerBar) return;
-  timerText.textContent = timeLeft;
-  timerBar.style.width = (timeLeft / TIME_LIMIT * 100) + '%';
+  if (timerText) timerText.textContent = timeLeft;
+  if (timerBar) timerBar.style.width = (timeLeft / TIME_LIMIT * 100) + '%';
 }
 
 function stopTimer() {
@@ -589,7 +613,7 @@ async function loadPhoto(pair) {
   const commonSlug = pair[0].toLowerCase().replace(/[^a-z0-9]/g, '_');
   const sciClean = pair[1].replace(/spp\.?/i, '').trim();
 
-  // Try direct R2 asset first
+  // Try Cloudflare R2 first
   const r2Url = `${CLOUDFLARE_R2_BASE}/${commonSlug}_image/${commonSlug}_leaf_image.jpg`;
   const imgTest = new Image();
   imgTest.src = r2Url;
@@ -603,7 +627,7 @@ async function loadPhoto(pair) {
   };
 
   imgTest.onerror = async () => {
-    // Fallback: iNaturalist API
+    // Direct Wikimedia / iNaturalist fallback
     try {
       const res = await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sciClean)}&per_page=1`);
       const data = await res.json();
