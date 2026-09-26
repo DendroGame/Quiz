@@ -5,14 +5,17 @@
    - On-demand Image Loading (Cloudflare R2 + iNaturalist fallback)
    - Multiple Choice & Typing Modes
 ============================================================================ */
-
+/* ============================================================================
+   LINES 8 - 15 of js/app.js
+============================================================================ */
 const CLOUDFLARE_R2_BASE = "https://pub-7c8f1ea1e424248a09ee567dfbcdedf.r2.dev";
-const WORKER_API = "https://quiz-api.jonathantate-ent.workers.dev"; // Your Cloudflare Worker endpoint
+// Set to your actual working Cloudflare Worker:
+const WORKER_API = "https://quiz.jonathantt.workers.dev";
 
-let masterSpecies = [];       // Full records from ./data/species.json
-let activeSpeciesPool = [];   // Filtered or selected subset used for quizzes
-let selectedIds = new Set();  // Set of active selected species IDs
-let filteredSpecies = [];     // Currently displayed list in search modal
+let masterSpecies = [];
+let activeSpeciesPool = [];
+let selectedIds = new Set();
+let filteredSpecies = [];
 let fuseInstance = null;
 
 const HARDCODED_PRESETS = [
