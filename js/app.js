@@ -1,11 +1,10 @@
 /* ============================================================================
-   DENDROLOGY MASTER QUIZ ENGINE — v1.0.17
-   - Immediate responsive start (no async freeze)
-   - Global window.startQuiz binding for buttons
-   - Cloudflare KV Leaderboard & R2 image support
-   - Multi-mode and multi-input options
-   - Working Quiz Test #1 - #5 lab presets
-   - Touch and mouse draggable photo resizer
+   DENDROLOGY MASTER QUIZ ENGINE — v1.0.18
+   - Live Cloudflare KV Global Leaderboard on Home Screen
+   - Slide-over Settings Sidebar
+   - Required Name Validation / Guest Opt-out (No Cloudflare Save)
+   - Dual-Source Diagnostic R2/iNaturalist Photo Resolver
+   - Full Spinzam 3D Scrubber Integration
 ============================================================================ */
 
 const CLOUDFLARE_R2_BASE = "https://pub-7c8f1ea1e424248a09ee567dfbcdedf.r2.dev";
@@ -55,9 +54,8 @@ let TIME_LIMIT = 15;
 let TOTAL = 10;
 let NUM_CHOICES = 4;
 let selectedSpecies = [];
-let playerName = 'Jonathan';
+let playerName = '';
 let isGuest = false;
-let isUltimate = false;
 
 let selectedModes = ['sci-to-common'];
 let selectedStyles = ['quiz'];
@@ -76,57 +74,23 @@ let timeLeft = TIME_LIMIT;
 let answered = false;
 let hintUsedThisQ = false;
 
-// DOM Elements Cache
+// DOM Cache
 let startScreen, quizScreen, endScreen, stats, promptEl, promptLabel;
 let optionsEl, feedback, nextBtn, progressBar, timerBar, timerText, speciesImg;
-let imgPlaceholder, imgLoading, spinBtn;
+let imgPlaceholder, imgLoading, spinBtn, settingsSidebar, sidebarBackdrop;
 
-function familyNameForPair(pair) {
-  if (!pair || !pair.length) return '';
-  let idx = -1;
-  for (let i = 0; i < SPECIES.length; i++) {
-    if (SPECIES[i][0] === pair[0] && SPECIES[i][1] === pair[1]) { idx = i; break; }
-  }
-  if (idx < 0) return 'Pinaceae';
-  const num = SPECIES_FAMILY[idx];
-  const f = FAMILIES.find(item => item.num === num);
-  return f ? `${f.num}. ${f.name}` : String(num);
-}
-
-function initImageResizer() {
-  const handle = document.getElementById('imgResizeHandle') || document.getElementById('resizeBar');
-  const wrap = document.getElementById('imageWrap') || document.getElementById('mediaViewer');
-  if (!handle || !wrap) return;
-
-  let startY, startH;
-  function onPointerDown(e) {
-    startY = e.clientY || (e.touches && e.touches[0].clientY);
-    startH = wrap.offsetHeight;
-    document.documentElement.addEventListener('pointermove', onPointerMove);
-    document.documentElement.addEventListener('pointerup', onPointerUp);
-    e.preventDefault();
-  }
-  function onPointerMove(e) {
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-    const newH = Math.max(60, Math.min(480, startH + (clientY - startY)));
-    wrap.style.height = `${newH}px`;
-    wrap.style.setProperty('--img-h', `${newH}px`);
-  }
-  function onPointerUp() {
-    document.documentElement.removeEventListener('pointermove', onPointerMove);
-    document.documentElement.removeEventListener('pointerup', onPointerUp);
-  }
-  handle.addEventListener('pointerdown', onPointerDown);
-}
+document.addEventListener('DOMContentLoaded', loadDataAndInit);
 
 async function loadDataAndInit() {
   cacheDOM();
-  initSettingsAndPanels();
+  initSidebar();
+  initControls();
   initImageResizer();
+  fetchGlobalLeaderboard();
 
   try {
     const res = await fetch('./data/species.json');
-    if (!res.ok) throw new Error("Could not load ./data/species.json");
+    if (!res.ok) throw new Error("Could not find ./data/species.json");
     SPECIES_DATA = await res.json();
     
     SPECIES = [];
@@ -144,10 +108,8 @@ async function loadDataAndInit() {
     });
 
     initFamilySelect();
-    fetchLeaderboard();
   } catch (err) {
-    console.warn("Falling back to internal presets:", err);
-    // Safe built-in fallback to ensure instant playability
+    console.warn("Using preset fallback species:", err);
     QUIZ_TEST_1_SCI.forEach(sci => {
       const words = sci.split(' ');
       const c = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -174,73 +136,62 @@ function cacheDOM() {
   imgPlaceholder = document.getElementById('imgPlaceholder');
   imgLoading = document.getElementById('imgLoading');
   spinBtn = document.getElementById('spinzamBtn');
+  settingsSidebar = document.getElementById('settingsSidebar');
+  sidebarBackdrop = document.getElementById('sidebarBackdrop');
 }
 
-function initSettingsAndPanels() {
-  document.getElementById('settingsBtn')?.addEventListener('click', () => {
-    document.getElementById('settingsPanel')?.classList.remove('hidden');
-  });
-  document.getElementById('settingsBtnQuiz')?.addEventListener('click', () => {
-    document.getElementById('settingsPanel')?.classList.remove('hidden');
-  });
-  document.getElementById('closeSettingsBtn')?.addEventListener('click', () => {
-    document.getElementById('settingsPanel')?.classList.add('hidden');
-  });
+function initSidebar() {
+  const openSidebar = () => {
+    settingsSidebar.classList.add('open');
+    sidebarBackdrop.classList.remove('hidden');
+  };
+  const closeSidebar = () => {
+    settingsSidebar.classList.remove('open');
+    sidebarBackdrop.classList.add('hidden');
+  };
 
-  // Multi-Mode Selector
+  document.getElementById('settingsBtn')?.addEventListener('click', openSidebar);
+  document.getElementById('settingsBtnQuiz')?.addEventListener('click', openSidebar);
+  document.getElementById('closeSidebarBtn')?.addEventListener('click', closeSidebar);
+  sidebarBackdrop?.addEventListener('click', closeSidebar);
+}
+
+function initControls() {
+  // Mode selection
   document.querySelectorAll('#modeSelect .mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const allModeBtns = document.querySelectorAll('#modeSelect .mode-btn');
-      const isCurrentlyActive = btn.classList.contains('active');
-      const activeCount = document.querySelectorAll('#modeSelect .mode-btn.active').length;
-
-      if (isCurrentlyActive && activeCount <= 1) return;
-
+      const allBtns = document.querySelectorAll('#modeSelect .mode-btn');
+      if (btn.classList.contains('active') && document.querySelectorAll('#modeSelect .mode-btn.active').length <= 1) return;
       btn.classList.toggle('active');
-
       selectedModes = [];
-      allModeBtns.forEach(b => {
-        if (b.classList.contains('active')) selectedModes.push(b.dataset.mode);
-      });
+      allBtns.forEach(b => { if (b.classList.contains('active')) selectedModes.push(b.dataset.mode); });
     });
   });
 
-  // Play Style Selector
+  // Play style
   const quizBtn = document.getElementById('playStyleQuiz');
   const typeBtn = document.getElementById('playStyleTyping');
-
-  function togglePlayStyle(clickedBtn) {
-    const isCurrentlyActive = clickedBtn.classList.contains('active');
-    const activeCount = document.querySelectorAll('#playStyleSelect .mode-btn.active').length;
-
-    if (isCurrentlyActive && activeCount <= 1) return;
-
-    clickedBtn.classList.toggle('active');
-
+  const toggleStyle = (btn) => {
+    if (btn.classList.contains('active') && document.querySelectorAll('#playStyleSelect .mode-btn.active').length <= 1) return;
+    btn.classList.toggle('active');
     selectedStyles = [];
     if (quizBtn?.classList.contains('active')) selectedStyles.push('quiz');
     if (typeBtn?.classList.contains('active')) selectedStyles.push('typing');
-  }
+  };
+  quizBtn?.addEventListener('click', () => toggleStyle(quizBtn));
+  typeBtn?.addEventListener('click', () => toggleStyle(typeBtn));
 
-  quizBtn?.addEventListener('click', () => togglePlayStyle(quizBtn));
-  typeBtn?.addEventListener('click', () => togglePlayStyle(typeBtn));
-
-  document.getElementById('timeLimitSlider')?.addEventListener('input', (e) => {
-    TIME_LIMIT = parseInt(e.target.value, 10);
-    const label = document.getElementById('timeLimitLabel');
-    if (label) label.textContent = TIME_LIMIT + 's';
-  });
-
+  // Count buttons
   document.querySelectorAll('#countSelect .count-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#countSelect .count-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       TOTAL = parseInt(btn.dataset.count, 10);
-      const startBtn = document.getElementById('startBtn');
-      if (startBtn) startBtn.textContent = `Start ${TOTAL}-question quiz`;
+      document.getElementById('startBtn').textContent = `Start ${TOTAL}-Question Quiz (Record Score)`;
     });
   });
 
+  // Choice buttons
   document.querySelectorAll('#choicesSelect .choice-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#choicesSelect .choice-btn').forEach(b => b.classList.remove('active'));
@@ -249,15 +200,47 @@ function initSettingsAndPanels() {
     });
   });
 
-  document.getElementById('startBtn')?.addEventListener('click', () => window.startQuiz(false));
-  document.getElementById('guestBtn')?.addEventListener('click', () => window.startQuiz(true));
-  document.getElementById('ultimateBtn')?.addEventListener('click', () => window.startQuiz('ultimate'));
+  // Timer slider
+  document.getElementById('timeLimitSlider')?.addEventListener('input', (e) => {
+    TIME_LIMIT = parseInt(e.target.value, 10);
+    document.getElementById('timeLimitLabel').textContent = TIME_LIMIT + 's';
+  });
 
+  // Start Buttons (Mandatory Name vs. Guest Handling)
+  document.getElementById('startBtn')?.addEventListener('click', () => {
+    const input = document.getElementById('playerName');
+    const entered = (input?.value || '').trim();
+    if (!entered) {
+      alert("Please enter a player name to save your score to the global leaderboard, or click 'Play as Guest'!");
+      input?.focus();
+      return;
+    }
+    playerName = entered;
+    isGuest = false;
+    launchGame();
+  });
+
+  document.getElementById('guestBtn')?.addEventListener('click', () => {
+    playerName = "Guest";
+    isGuest = true;
+    launchGame();
+  });
+
+  document.getElementById('ultimateBtn')?.addEventListener('click', () => {
+    const input = document.getElementById('playerName');
+    playerName = (input?.value || '').trim() || 'Champion';
+    isGuest = false;
+    TOTAL = SPECIES.length;
+    launchGame();
+  });
+
+  document.getElementById('refreshLbBtn')?.addEventListener('click', fetchGlobalLeaderboard);
   nextBtn?.addEventListener('click', nextQuestion);
-  document.getElementById('startOverBtn')?.addEventListener('click', () => window.startQuiz(false));
+  document.getElementById('startOverBtn')?.addEventListener('click', launchGame);
   document.getElementById('homeBtn')?.addEventListener('click', () => {
-    endScreen?.classList.add('hidden');
-    startScreen?.classList.remove('hidden');
+    endScreen.classList.add('hidden');
+    startScreen.classList.remove('hidden');
+    fetchGlobalLeaderboard();
   });
 
   document.getElementById('hintBtn')?.addEventListener('click', () => {
@@ -267,9 +250,10 @@ function initSettingsAndPanels() {
 
   document.getElementById('cancelQuizBtn')?.addEventListener('click', () => {
     stopTimer();
-    quizScreen?.classList.add('hidden');
-    stats?.classList.add('hidden');
-    startScreen?.classList.remove('hidden');
+    quizScreen.classList.add('hidden');
+    stats.classList.add('hidden');
+    startScreen.classList.remove('hidden');
+    fetchGlobalLeaderboard();
   });
 
   document.getElementById('typeSubmitBtn')?.addEventListener('click', handleTypedAnswer);
@@ -287,7 +271,7 @@ function initFamilySelect() {
   FAMILIES.forEach(f => {
     const block = document.createElement('div');
     block.style.padding = '4px 0';
-    block.innerHTML = `<label class="chk-label" style="font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;">
+    block.innerHTML = `<label class="chk-label" style="font-size:0.8rem;">
       <input type="checkbox" class="family-cb" data-fam="${f.num}"> ${f.num}. ${f.name} (${f.count})
     </label>`;
     list.appendChild(block);
@@ -296,7 +280,7 @@ function initFamilySelect() {
   document.getElementById('familyAllBtn')?.addEventListener('click', () => {
     selectedSpecies = [];
     document.querySelectorAll('.family-cb').forEach(c => c.checked = false);
-    if (summary) summary.textContent = `All species (${SPECIES.length})`;
+    if (summary) summary.textContent = `All species active (${SPECIES.length})`;
   });
 
   const presets = [
@@ -321,13 +305,38 @@ function initFamilySelect() {
           if (want.has(pair[1].toLowerCase().trim())) matches.push(idx);
         });
         selectedSpecies = matches;
-        if (summary) summary.textContent = `${matches.length} species selected (Preset active)`;
+        if (summary) summary.textContent = `${matches.length} species selected (Preset filter active)`;
       } else {
         selectedSpecies = [];
-        if (summary) summary.textContent = `All species (${SPECIES.length})`;
+        if (summary) summary.textContent = `All species active (${SPECIES.length})`;
       }
     });
   });
+}
+
+function initImageResizer() {
+  const handle = document.getElementById('imgResizeHandle');
+  const wrap = document.getElementById('imageWrap');
+  if (!handle || !wrap) return;
+
+  let startY, startH;
+  const onPointerDown = (e) => {
+    startY = e.clientY || (e.touches && e.touches[0].clientY);
+    startH = wrap.offsetHeight;
+    document.documentElement.addEventListener('pointermove', onPointerMove);
+    document.documentElement.addEventListener('pointerup', onPointerUp);
+    e.preventDefault();
+  };
+  const onPointerMove = (e) => {
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const newH = Math.max(90, Math.min(500, startH + (clientY - startY)));
+    wrap.style.height = `${newH}px`;
+  };
+  const onPointerUp = () => {
+    document.documentElement.removeEventListener('pointermove', onPointerMove);
+    document.documentElement.removeEventListener('pointerup', onPointerUp);
+  };
+  handle.addEventListener('pointerdown', onPointerDown);
 }
 
 function shuffle(arr) {
@@ -339,17 +348,10 @@ function shuffle(arr) {
   return a;
 }
 
-// Globally bound start function
-window.startQuiz = function(modeArg) {
-  cacheDOM();
-  isGuest = (modeArg === true);
-  isUltimate = (modeArg === 'ultimate');
-  const nameInput = document.getElementById('playerName');
-  playerName = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : (isGuest ? 'Guest' : 'Jonathan');
-
+function launchGame() {
   const pool = selectedSpecies.length ? selectedSpecies.map(i => SPECIES[i]) : SPECIES.slice();
   if (!pool.length) {
-    alert("Please select at least one species, family, or preset!");
+    alert("Please select at least one species or family in Settings!");
     return;
   }
 
@@ -359,18 +361,18 @@ window.startQuiz = function(modeArg) {
   score = 0;
   streak = 0;
 
-  startScreen?.classList.add('hidden');
-  endScreen?.classList.add('hidden');
-  quizScreen?.classList.remove('hidden');
-  stats?.classList.remove('hidden');
+  startScreen.classList.add('hidden');
+  endScreen.classList.add('hidden');
+  quizScreen.classList.remove('hidden');
+  stats.classList.remove('hidden');
 
   showQuestion();
-};
+}
 
 function showQuestion() {
-  feedback?.classList.add('hidden');
-  nextBtn?.classList.add('hidden');
-  if (optionsEl) optionsEl.innerHTML = '';
+  feedback.classList.add('hidden');
+  nextBtn.classList.add('hidden');
+  optionsEl.innerHTML = '';
   answered = false;
   hintUsedThisQ = false;
 
@@ -383,38 +385,37 @@ function showQuestion() {
   currentSpeciesObj = SPECIES_DATA.find(s => s.scientific && s.scientific.toLowerCase() === pair[1].toLowerCase()) || null;
 
   if (currentMode === 'common-to-sci') {
-    if (promptLabel) promptLabel.textContent = 'Scientific name';
-    if (promptEl) promptEl.textContent = pair[0];
+    promptLabel.textContent = 'Scientific Name';
+    promptEl.textContent = pair[0];
     currentCorrect = pair[1];
   } else if (currentMode === 'family') {
-    if (promptLabel) promptLabel.textContent = 'Botanical Family';
-    if (promptEl) promptEl.textContent = `${pair[0]} (${pair[1]})`;
-    currentCorrect = familyNameForPair(pair);
+    promptLabel.textContent = 'Botanical Family';
+    promptEl.textContent = `${pair[0]} (${pair[1]})`;
+    const fIdx = SPECIES.findIndex(p => p[0] === pair[0]);
+    const fNum = SPECIES_FAMILY[fIdx] || 1;
+    const fObj = FAMILIES.find(f => f.num === fNum);
+    currentCorrect = fObj ? `${fObj.num}. ${fObj.name}` : 'Pinaceae';
   } else {
-    if (promptLabel) promptLabel.textContent = 'Common name';
-    if (promptEl) promptEl.textContent = pair[1];
+    promptLabel.textContent = 'Common Name';
+    promptEl.textContent = pair[1];
     currentCorrect = pair[0];
   }
 
-  const qNumEl = document.getElementById('qNum');
-  const totalQEl = document.getElementById('totalQ');
-  if (qNumEl) qNumEl.textContent = qIndex + 1;
-  if (totalQEl) totalQEl.textContent = TOTAL;
-  if (progressBar) progressBar.style.width = ((qIndex / TOTAL) * 100) + '%';
+  document.getElementById('qNum').textContent = qIndex + 1;
+  document.getElementById('totalQ').textContent = TOTAL;
+  progressBar.style.width = ((qIndex / TOTAL) * 100) + '%';
 
+  // 3D Turntable Scrubber Link
   if (spinBtn) {
     if (currentSpeciesObj && currentSpeciesObj.spinzam_url) {
       spinBtn.classList.remove('hidden');
       spinBtn.onclick = () => {
-        const slot = document.getElementById('imageSlot');
-        if (slot) {
-          slot.innerHTML = `
-            <iframe src="${currentSpeciesObj.spinzam_url}" 
-                    width="100%" height="100%" 
-                    frameborder="0" scrolling="no" 
-                    style="border:none;" allowfullscreen>
-            </iframe>`;
-        }
+        document.getElementById('imageSlot').innerHTML = `
+          <iframe src="${currentSpeciesObj.spinzam_url}" 
+                  width="100%" height="100%" 
+                  frameborder="0" scrolling="no" 
+                  style="border:none;" allowfullscreen>
+          </iframe>`;
       };
     } else {
       spinBtn.classList.add('hidden');
@@ -425,7 +426,7 @@ function showQuestion() {
   const typeInput = document.getElementById('typeAnswerInput');
 
   if (typeAnswerMode) {
-    optionsEl?.classList.add('hidden');
+    optionsEl.classList.add('hidden');
     typeArea?.classList.remove('hidden');
     if (typeInput) {
       typeInput.value = '';
@@ -434,7 +435,7 @@ function showQuestion() {
     }
   } else {
     typeArea?.classList.add('hidden');
-    optionsEl?.classList.remove('hidden');
+    optionsEl.classList.remove('hidden');
 
     let choices = [currentCorrect];
     if (currentMode === 'family') {
@@ -450,7 +451,7 @@ function showQuestion() {
       btn.className = 'option';
       btn.textContent = opt;
       btn.addEventListener('click', () => selectAnswer(btn, opt));
-      optionsEl?.appendChild(btn);
+      optionsEl.appendChild(btn);
     });
   }
 
@@ -461,8 +462,7 @@ function showQuestion() {
 function handleTypedAnswer() {
   if (answered) return;
   const input = document.getElementById('typeAnswerInput');
-  const typed = (input?.value || '').trim();
-  selectAnswer(document.createElement('div'), typed);
+  selectAnswer(document.createElement('div'), (input?.value || '').trim());
 }
 
 function selectAnswer(btn, chosen) {
@@ -470,38 +470,32 @@ function selectAnswer(btn, chosen) {
   answered = true;
   stopTimer();
 
-  optionsEl?.querySelectorAll('.option').forEach(o => o.disabled = true);
+  optionsEl.querySelectorAll('.option').forEach(o => o.disabled = true);
   const correct = chosen.toLowerCase().trim() === currentCorrect.toLowerCase().trim();
 
   if (correct) {
-    if (btn) btn.classList.add('correct');
+    btn.classList.add('correct');
     score++;
     streak++;
-    if (feedback) {
-      feedback.textContent = '✓ Correct!';
-      feedback.className = 'feedback correct';
-    }
+    feedback.textContent = '✓ Correct!';
+    feedback.className = 'feedback correct';
   } else {
-    if (btn) btn.classList.add('wrong');
+    btn.classList.add('wrong');
     streak = 0;
-    optionsEl?.querySelectorAll('.option').forEach(o => {
+    optionsEl.querySelectorAll('.option').forEach(o => {
       if (o.textContent.toLowerCase().trim() === currentCorrect.toLowerCase().trim()) {
         o.classList.add('correct');
       }
     });
-    if (feedback) {
-      feedback.textContent = `✗ Wrong — Correct: ${currentCorrect}`;
-      feedback.className = 'feedback wrong';
-    }
+    feedback.textContent = `✗ Wrong — Correct: ${currentCorrect}`;
+    feedback.className = 'feedback wrong';
   }
 
-  feedback?.classList.remove('hidden');
+  feedback.classList.remove('hidden');
   revealImage();
-  nextBtn?.classList.remove('hidden');
-  const scEl = document.getElementById('score');
-  const stEl = document.getElementById('streak');
-  if (scEl) scEl.textContent = score;
-  if (stEl) stEl.textContent = streak;
+  nextBtn.classList.remove('hidden');
+  document.getElementById('score').textContent = score;
+  document.getElementById('streak').textContent = streak;
 }
 
 function nextQuestion() {
@@ -515,56 +509,87 @@ function nextQuestion() {
 
 async function endQuiz() {
   stopTimer();
-  quizScreen?.classList.add('hidden');
-  stats?.classList.add('hidden');
-  endScreen?.classList.remove('hidden');
+  quizScreen.classList.add('hidden');
+  stats.classList.add('hidden');
+  endScreen.classList.remove('hidden');
 
   const pct = Math.round((score / TOTAL) * 100) || 0;
   const msgEl = document.getElementById('endMsg');
-  if (msgEl) {
-    msgEl.textContent = `Final Score: ${score}/${TOTAL} (${pct}%)`;
-  }
+  const kvNotice = document.getElementById('endKvStatus');
 
-  // Background sync to Cloudflare Worker KV
-  if (WORKER_API) {
+  if (msgEl) msgEl.textContent = `Final Score: ${score}/${TOTAL} (${pct}%)`;
+
+  // CLOUDFLARE KV PERSISTENCE
+  if (isGuest) {
+    if (kvNotice) {
+      kvNotice.className = "kv-notice guest";
+      kvNotice.textContent = "Played as Guest: Score was not recorded to the Cloudflare Global Leaderboard.";
+      kvNotice.classList.remove('hidden');
+    }
+  } else if (WORKER_API) {
+    if (kvNotice) {
+      kvNotice.className = "kv-notice";
+      kvNotice.textContent = "Transmitting score to Cloudflare KV...";
+      kvNotice.classList.remove('hidden');
+    }
+
     try {
       const payload = {
-        player: playerName || "Jonathan",
+        player: playerName,
         score: score,
         total: TOTAL,
-        mode: currentMode || "sci-to-common"
+        mode: currentMode
       };
 
-      fetch(`${WORKER_API}/api/leaderboard`, {
+      const res = await fetch(`${WORKER_API}/api/leaderboard`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
-      }).then(() => fetchLeaderboard()).catch(() => {});
-    } catch (e) {}
+      });
+
+      if (res.ok) {
+        if (kvNotice) {
+          kvNotice.className = "kv-notice success";
+          kvNotice.textContent = "✓ Score successfully recorded to Cloudflare Global Hall of Fame!";
+        }
+      }
+    } catch (e) {
+      if (kvNotice) {
+        kvNotice.className = "kv-notice guest";
+        kvNotice.textContent = "Could not sync score to Cloudflare (Network error).";
+      }
+    }
   }
 }
 
-async function fetchLeaderboard() {
-  if (!WORKER_API) return;
+async function fetchGlobalLeaderboard() {
+  const listEl = document.getElementById('leaderboardList');
+  if (!WORKER_API || !listEl) return;
+
   try {
     const res = await fetch(`${WORKER_API}/api/leaderboard`);
-    if (res.ok) {
-      const data = await res.json();
-      const listEl = document.getElementById('leaderboardList');
-      if (listEl && Array.isArray(data)) {
-        listEl.innerHTML = '';
-        data.slice(0, 10).forEach((entry, i) => {
-          const row = document.createElement('div');
-          row.style.display = 'flex';
-          row.style.justifyContent = 'space-between';
-          row.style.padding = '4px 0';
-          row.style.borderBottom = '1px solid rgba(61,139,110,0.2)';
-          row.innerHTML = `<span>#${i+1} ${entry.player || 'Player'}</span><strong>${entry.score}/${entry.total} (${Math.round((entry.score/entry.total)*100)}%)</strong>`;
-          listEl.appendChild(row);
-        });
-      }
+    if (!res.ok) throw new Error("Leaderboard unreachable");
+    const data = await res.json();
+
+    if (Array.isArray(data) && data.length > 0) {
+      listEl.innerHTML = '';
+      data.slice(0, 10).forEach((entry, i) => {
+        const row = document.createElement('div');
+        row.className = 'lb-row';
+        const pct = Math.round((entry.score / entry.total) * 100);
+        row.innerHTML = `
+          <span class="lb-rank">#${i + 1}</span>
+          <span class="lb-name">${entry.player || 'Player'}</span>
+          <span class="lb-score">${entry.score}/${entry.total} (${pct}%)</span>
+        `;
+        listEl.appendChild(row);
+      });
+    } else {
+      listEl.innerHTML = '<div class="lb-loading">No scores recorded yet. Be the first!</div>';
     }
-  } catch (err) {}
+  } catch (err) {
+    listEl.innerHTML = '<div class="lb-loading">Leaderboard offline. Play as guest or check Cloudflare.</div>';
+  }
 }
 
 function updateTimerDisplay() {
@@ -595,8 +620,8 @@ async function loadPhoto(pair) {
   if (slot && !slot.querySelector('#speciesImg')) {
     slot.innerHTML = `
       <span class="image-placeholder" id="imgPlaceholder">🌿</span>
-      <span class="image-loading hidden" id="imgLoading">Loading photo…</span>
-      <img id="speciesImg" alt="Species photo" />
+      <span class="image-loading hidden" id="imgLoading">Loading specimen…</span>
+      <img id="speciesImg" alt="Woody specimen diagnostic photo" />
     `;
     speciesImg = document.getElementById('speciesImg');
     imgPlaceholder = document.getElementById('imgPlaceholder');
@@ -613,7 +638,7 @@ async function loadPhoto(pair) {
   const commonSlug = pair[0].toLowerCase().replace(/[^a-z0-9]/g, '_');
   const sciClean = pair[1].replace(/spp\.?/i, '').trim();
 
-  // Try Cloudflare R2 first
+  // Try Cloudflare R2 Diagnostic Asset
   const r2Url = `${CLOUDFLARE_R2_BASE}/${commonSlug}_image/${commonSlug}_leaf_image.jpg`;
   const imgTest = new Image();
   imgTest.src = r2Url;
@@ -627,7 +652,7 @@ async function loadPhoto(pair) {
   };
 
   imgTest.onerror = async () => {
-    // Direct Wikimedia / iNaturalist fallback
+    // iNaturalist Dynamic Fallback
     try {
       const res = await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sciClean)}&per_page=1`);
       const data = await res.json();
@@ -648,5 +673,3 @@ function revealImage() {
   if (speciesImg && speciesImg.src) speciesImg.classList.add('revealed');
   if (imgPlaceholder) imgPlaceholder.style.opacity = '0';
 }
-
-document.addEventListener('DOMContentLoaded', loadDataAndInit);
