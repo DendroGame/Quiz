@@ -12,7 +12,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B3%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css">
   <title>🌲 Dendrology Master Quiz</title>
-  <!-- Fuse.js for forgiving fuzzy matching across 1,100+ species -->
+  <!-- Fuse.js for forgiving fuzzy search -->
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
 </head>
 <body>
@@ -89,7 +89,7 @@
   <div id="speciesModal" class="modal-card wide-card hidden">
     <div class="modal-header">
       <div class="header-left">
-        <h2>🌲 Species Picker &amp; Cloudflare Presets</h2>
+        <h2>🌲 Species Picker &amp; Presets</h2>
         <span id="selectedCountBadge" class="badge">0 selected</span>
       </div>
       <button type="button" id="closeSpeciesModalBtn" class="close-btn">&times;</button>
@@ -101,7 +101,7 @@
         <input 
           type="text" 
           id="speciesSearchInput" 
-          placeholder="Type to search (e.g., 'querc alb', 'sug mple', 'pinaceae', 'oak')..." 
+          placeholder="Type anything (e.g. 'querc alb', 'sug mple', 'pinaceae', 'oak')..." 
           autocomplete="off"
         />
         <button type="button" id="clearSearchBtn" class="btn-subtle">Clear</button>
@@ -120,7 +120,7 @@
         <div id="familyListItems"></div>
       </aside>
       <main class="species-grid" id="speciesResultGrid">
-        <!-- Rendered items appear here -->
+        <!-- Species items injected here -->
       </main>
     </div>
 
@@ -140,7 +140,7 @@
     </div>
   </div>
 
-  <!-- IN-QUIZ FLOATING SCOREBAR -->
+  <!-- FLOATING IN-QUIZ SCOREBAR -->
   <header class="stats hidden" id="stats">
     <button type="button" id="cancelQuizBtn" class="btn-quit" title="Cancel Quiz">✕ Abort</button>
     <div class="stat-pill">Score: <strong id="score">0</strong></div>
@@ -196,7 +196,7 @@
       </div>
     </section>
 
-    <!-- ACTIVE QUIZ STAGE -->
+    <!-- ACTIVE QUIZ SCREEN -->
     <section class="card hidden" id="quizScreen">
       <div class="progress"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
 
