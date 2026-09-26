@@ -8,52 +8,44 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Dendrology Quiz">
-  <meta name="application-name" content="Dendrology Quiz">
-  <meta name="description" content="Practice scientific and common names for dendrology species.">
+  <meta name="description" content="Virginia Tech Dendrology Master Species, Preset Creator & 3D Bud Viewer">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B3%3C/text%3E%3C/svg%3E">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B3%3C/text%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <title>Dendrology Master Quiz v1.0.18</title>
+  <title>🌲 Dendrology Master Quiz</title>
+  <!-- Fuse.js for forgiving fuzzy matching across 1,100+ species -->
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
 </head>
 <body>
   <canvas id="confettiCanvas"></canvas>
 
-  <!-- Sidebar Overlay -->
+  <!-- SIDEBAR SETTINGS OVERLAY -->
   <div id="sidebarBackdrop" class="sidebar-backdrop hidden"></div>
-
-  <!-- SLIDE-OVER SETTINGS SIDEBAR -->
   <aside id="settingsSidebar" class="settings-sidebar">
     <div class="sidebar-header">
-      <h2>⚙️ Settings & Controls</h2>
+      <h2>⚙️ Quiz Settings</h2>
       <button type="button" id="closeSidebarBtn" class="sidebar-close-btn" title="Close Settings">✕</button>
     </div>
     
     <div class="sidebar-content">
-      <!-- Quiz Direction Mode -->
       <div class="set-row">
-        <span class="label">Quiz Mode <span class="sub-label">(Select one or more)</span></span>
+        <span class="label">Quiz Mode</span>
         <div class="mode-select" id="modeSelect">
           <button type="button" class="mode-btn active" data-mode="sci-to-common">Sci → Common</button>
           <button type="button" class="mode-btn" data-mode="common-to-sci">Common → Sci</button>
-          <button type="button" class="mode-btn" data-mode="family">Botanical Family</button>
+          <button type="button" class="mode-btn" data-mode="family">Family Names</button>
         </div>
       </div>
 
-      <!-- Play Style -->
       <div class="set-row">
-        <span class="label">Input Style <span class="sub-label">(Quiz or Typing)</span></span>
+        <span class="label">Input Style</span>
         <div class="mode-select" id="playStyleSelect">
           <button type="button" class="mode-btn active" id="playStyleQuiz" data-style="quiz">Multiple Choice</button>
           <button type="button" class="mode-btn" id="playStyleTyping" data-style="typing">Typing Mode</button>
         </div>
       </div>
 
-      <!-- Question Count -->
-      <div class="set-row" id="countSelectRow">
-        <span class="label">Question Count</span>
+      <div class="set-row">
+        <span class="label">Questions Count</span>
         <div class="pill-group" id="countSelect">
           <button type="button" class="count-btn" data-count="5">5</button>
           <button type="button" class="count-btn active" data-count="10">10</button>
@@ -63,8 +55,7 @@
         </div>
       </div>
 
-      <!-- Choices Count -->
-      <div class="set-row" id="choicesRow">
+      <div class="set-row">
         <span class="label">Answer Choices</span>
         <div class="pill-group" id="choicesSelect">
           <button type="button" class="choice-btn" data-choices="2">2</button>
@@ -74,7 +65,6 @@
         </div>
       </div>
 
-      <!-- Timer Limit Slider -->
       <div class="set-row">
         <div class="split-label">
           <span class="label">Timer per question</span>
@@ -83,25 +73,72 @@
         <input type="range" id="timeLimitSlider" min="5" max="60" value="15" step="5" class="slider" />
       </div>
 
-      <!-- Presets -->
-      <div class="set-row" id="presetSection">
-        <span class="label">Lab Exam Presets</span>
-        <label class="chk-label"><input type="checkbox" id="quizTest1Toggle" /> Quiz Test #1 (Preset Species)</label>
-        <label class="chk-label"><input type="checkbox" id="quizTest2Toggle" /> Quiz Test #2 (Preset Species)</label>
-        <label class="chk-label"><input type="checkbox" id="quizTest3Toggle" /> Quiz Test #3 (Preset Species)</label>
-        <label class="chk-label"><input type="checkbox" id="quizTest4Toggle" /> Quiz Test #4 (Preset Species)</label>
-        <label class="chk-label"><input type="checkbox" id="quizTest5Toggle" /> Quiz Test #5 (Preset Species)</label>
-      </div>
-
-      <!-- Family Species Filter -->
-      <div class="set-row" id="familySection">
-        <span class="label">Filter by Botanical Family</span>
-        <p id="familySummary" class="family-summary">All species active</p>
-        <button type="button" id="familyAllBtn" class="btn-sub">Clear Filter (Select All)</button>
-        <div id="familyCheckList" class="family-checklist">Loading Families…</div>
+      <div class="set-row">
+        <span class="label">Hardcoded Lab Presets</span>
+        <label class="chk-label"><input type="checkbox" id="quizTest1Toggle" /> Quiz Test #1</label>
+        <label class="chk-label"><input type="checkbox" id="quizTest2Toggle" /> Quiz Test #2</label>
+        <label class="chk-label"><input type="checkbox" id="quizTest3Toggle" /> Quiz Test #3</label>
+        <label class="chk-label"><input type="checkbox" id="quizTest4Toggle" /> Quiz Test #4</label>
+        <label class="chk-label"><input type="checkbox" id="quizTest5Toggle" /> Quiz Test #5</label>
       </div>
     </div>
   </aside>
+
+  <!-- MODAL: FORGIVING SPECIES PICKER & CLOUDFLARE PRESETS -->
+  <div id="speciesModalBackdrop" class="modal-backdrop hidden"></div>
+  <div id="speciesModal" class="modal-card wide-card hidden">
+    <div class="modal-header">
+      <div class="header-left">
+        <h2>🌲 Species Picker &amp; Cloudflare Presets</h2>
+        <span id="selectedCountBadge" class="badge">0 selected</span>
+      </div>
+      <button type="button" id="closeSpeciesModalBtn" class="close-btn">&times;</button>
+    </div>
+
+    <!-- Forgiving Search Bar & Ribbon -->
+    <div class="search-ribbon">
+      <div class="search-input-wrap">
+        <input 
+          type="text" 
+          id="speciesSearchInput" 
+          placeholder="Type to search (e.g., 'querc alb', 'sug mple', 'pinaceae', 'oak')..." 
+          autocomplete="off"
+        />
+        <button type="button" id="clearSearchBtn" class="btn-subtle">Clear</button>
+      </div>
+      <div class="bulk-actions">
+        <button type="button" id="selectAllFilteredBtn" class="btn-action">Select Filtered</button>
+        <button type="button" id="deselectAllBtn" class="btn-action">Clear All</button>
+        <button type="button" id="invertSelectionBtn" class="btn-action">Invert</button>
+      </div>
+    </div>
+
+    <!-- Split Picker View -->
+    <div class="picker-body">
+      <aside class="family-sidebar" id="familySidebarList">
+        <h3>Families</h3>
+        <div id="familyListItems"></div>
+      </aside>
+      <main class="species-grid" id="speciesResultGrid">
+        <!-- Rendered items appear here -->
+      </main>
+    </div>
+
+    <!-- Cloudflare KV Preset Toolbar -->
+    <div class="preset-footer">
+      <div class="preset-save-box">
+        <input type="text" id="presetTitleInput" placeholder="Preset name (e.g. Lab 4 Oaks)" maxlength="32">
+        <input type="text" id="presetAuthorInput" placeholder="Your name" maxlength="20">
+        <button type="button" id="savePresetCloudBtn" class="btn-primary">☁️ Save to Cloudflare</button>
+      </div>
+      <div class="preset-list-box">
+        <select id="cloudPresetDropdown">
+          <option value="">-- Load from Cloudflare --</option>
+        </select>
+        <button type="button" id="loadPresetCloudBtn" class="btn-secondary">Load</button>
+      </div>
+    </div>
+  </div>
 
   <!-- IN-QUIZ FLOATING SCOREBAR -->
   <header class="stats hidden" id="stats">
@@ -114,34 +151,34 @@
 
   <!-- MAIN APP CONTAINER -->
   <main class="app-container">
-
-    <!-- HOME / START SCREEN WITH LIVE LEADERBOARD -->
+    <!-- HOME / START SCREEN -->
     <section class="card" id="startScreen">
       <div class="home-head">
         <div class="brand">
           <h1>🌲 Dendrology Master</h1>
-          <p class="subtitle">1,250 Woody Plants of North America · 2026</p>
+          <p class="subtitle" id="poolStatusSubtitle">Loading species database…</p>
         </div>
-        <button type="button" id="settingsBtn" class="btn-gear-head" title="Open Settings Sidebar">⚙️ Settings</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="openSpeciesModalBtn" class="btn-preset-open">🌲 Pick Species / Presets</button>
+          <button type="button" id="settingsBtn" class="btn-gear-head" title="Settings">⚙️ Settings</button>
+        </div>
       </div>
 
-      <!-- Player Registration Card -->
       <div class="player-card">
-        <label for="playerName" class="player-label">Player Name (Required for Leaderboard)</label>
+        <label for="playerName" class="player-label">Player Name (for Global Leaderboard)</label>
         <div class="input-row">
-          <input type="text" id="playerName" maxlength="24" placeholder="Enter your name…" autocomplete="nickname" class="player-input" />
+          <input type="text" id="playerName" maxlength="24" placeholder="Enter your name…" class="player-input" />
         </div>
-        <p class="guest-notice">Scores under a real name are saved globally to Cloudflare KV. Guest scores are not recorded.</p>
+        <p class="guest-notice">High scores are synchronized globally to Cloudflare KV[cite: 3].</p>
       </div>
 
-      <!-- Primary Action Buttons -->
       <div class="action-grid">
-        <button type="button" class="btn-main" id="startBtn">Start Quiz (Record Score)</button>
-        <button type="button" class="btn-guest" id="guestBtn">Play as Guest (Score Not Saved)</button>
-        <button type="button" class="btn-ultimate" id="ultimateBtn">🌟 Ultimate Test (All Species)</button>
+        <button type="button" class="btn-main" id="startBtn">Start 10-Question Quiz</button>
+        <button type="button" class="btn-guest" id="guestBtn">Play as Guest</button>
+        <button type="button" class="btn-ultimate" id="ultimateBtn">🌟 Ultimate Test (Active Pool)</button>
       </div>
 
-      <!-- Live Global Leaderboard Component -->
+      <!-- Cloudflare Global Hall of Fame -->
       <div class="leaderboard-card">
         <div class="leaderboard-header">
           <div class="lb-title-group">
@@ -151,7 +188,7 @@
               <p class="lb-sub">Real-time Cloudflare KV High Scores</p>
             </div>
           </div>
-          <button type="button" id="refreshLbBtn" class="btn-refresh" title="Refresh Leaderboard">🔄 Refresh</button>
+          <button type="button" id="refreshLbBtn" class="btn-refresh">🔄 Refresh</button>
         </div>
         <div id="leaderboardList" class="leaderboard-list">
           <div class="lb-loading">Connecting to Cloudflare KV…</div>
@@ -169,7 +206,6 @@
         <span class="timer-text" id="timerText">15</span>
       </div>
 
-      <!-- Diagnostic Photo & 3D Scrubber Viewer -->
       <div class="image-wrap" id="imageWrap">
         <div class="image-slot" id="imageSlot">
           <span class="image-placeholder" id="imgPlaceholder">🌿</span>
@@ -190,12 +226,10 @@
         <div class="prompt" id="prompt">—</div>
       </div>
 
-      <!-- Multiple Choice Options -->
       <div class="options" id="options"></div>
 
-      <!-- Typing Mode Input -->
       <div id="typeAnswerArea" class="type-answer-area hidden">
-        <input type="text" id="typeAnswerInput" class="type-answer-input" autocomplete="off" spellcheck="false" placeholder="Type scientific or common name…" />
+        <input type="text" id="typeAnswerInput" class="type-answer-input" autocomplete="off" spellcheck="false" placeholder="Type answer here…" />
         <button type="button" id="typeSubmitBtn" class="btn-main" style="margin-top:10px;">Submit Answer</button>
       </div>
 
@@ -215,11 +249,8 @@
         </div>
       </div>
     </section>
-
   </main>
-<!-- Forgiving client-side fuzzy search (typo-tolerant) -->
-  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+
   <script type="module" src="js/app.js"></script>
-  <script src="js/app.js"></script>
 </body>
 </html>
