@@ -1,16 +1,13 @@
 /* ============================================================================
-   DENDROLOGY MASTER QUIZ ENGINE
-   - Forgiving Fuzzy Search via Fuse.js (common name, binomial, family)
-   - Cloudflare Worker KV Presets & Global Leaderboard Integration
-   - On-demand Image Loading (Cloudflare R2 + iNaturalist fallback)
-   - Multiple Choice & Typing Modes
+   VIRGINIA TECH MASTER DENDROLOGY ENGINE — js/app.js
+   - Resilient database loader with built-in fallback
+   - Forgiving Fuzzy Search (Fuse.js)
+   - Cloudflare Worker KV Presets & Leaderboard sync
+   - Diagnostic Specimen Image Pipeline + Resizable Viewer
 ============================================================================ */
-/* ============================================================================
-   LINES 8 - 15 of js/app.js
-============================================================================ */
+
 const CLOUDFLARE_R2_BASE = "https://pub-7c8f1ea1e424248a09ee567dfbcdedf.r2.dev";
-// Set to your actual working Cloudflare Worker:
-const WORKER_API = "https://quiz.jonathantt.workers.dev";
+const WORKER_API = "https://quiz.jonathantt.workers.dev"; // Confirmed Worker endpoint
 
 let masterSpecies = [];
 let activeSpeciesPool = [];
@@ -26,7 +23,7 @@ const HARDCODED_PRESETS = [
   { id: 'quizTest5Toggle', sci: ["malus pumila","pinus taeda","quercus phellos","hedera helix","catalpa speciosa","cornus kousa","carya glabra var.glabra","fraxinus pennsylvanica","rubus phoenicolasius","ulmus rubra","rosa multiflora","cupressocyparis leylandii","acer saccharinum"] }
 ];
 
-// Quiz Configurations
+// Quiz Config
 let TIME_LIMIT = 15;
 let TOTAL = 10;
 let NUM_CHOICES = 4;
@@ -38,7 +35,7 @@ let selectedStyles = ['quiz'];
 let currentMode = 'sci-to-common';
 let typeAnswerMode = false;
 
-// In-Game Variables
+// Round State
 let score = 0;
 let streak = 0;
 let qIndex = 0;
@@ -62,36 +59,61 @@ async function initApplication() {
   initQuizControls();
   initSpeciesModal();
   initImageResizer();
-  fetchGlobalLeaderboard();
+  
+  // Non-blocking leaderboard fetch
+  fetchGlobalLeaderboard().catch(() => {});
 
+  let rawData = null;
+
+  // 1. Fetch species.json from possible local paths
   try {
     const res = await fetch('./data/species.json');
-    if (!res.ok) throw new Error("Could not find ./data/species.json");
-    const rawData = await res.json();
-    
-    // Normalize species schema
-    masterSpecies = rawData.map((item, idx) => ({
-      id: item.id !== undefined ? String(item.id) : String(idx + 1),
-      common: item.common || "Unknown Common Name",
-      scientific: item.scientific || "Unknown Species",
-      family: item.family || (item.familyNum ? `Family #${item.familyNum}` : "Pinaceae"),
-      spinzam_url: item.spinzam_url || null
-    }));
-
-    // Start with all species selected
-    masterSpecies.forEach(sp => selectedIds.add(sp.id));
-    filteredSpecies = [...masterSpecies];
-    activeSpeciesPool = [...masterSpecies];
-
-    initFuzzySearch();
-    renderSpeciesGrid();
-    renderFamilySidebar();
-    fetchCloudPresets();
-    updatePoolStatus();
-  } catch (err) {
-    console.error("Species data loading failed:", err);
-    document.getElementById('poolStatusSubtitle').textContent = "Failed to load database. Check console.";
+    if (res.ok) {
+      rawData = await res.json();
+    } else {
+      const resAlt = await fetch('./species.json');
+      if (resAlt.ok) rawData = await resAlt.json();
+    }
+  } catch (e) {
+    console.warn("Could not load external species.json, using fallback lab presets.", e);
   }
+
+  // 2. Safe Fallback if file is missing or failed
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+    console.warn("Activating built-in preset fallback dataset.");
+    const fallbackMap = new Map();
+    HARDCODED_PRESETS.forEach(p => {
+      p.sci.forEach(s => {
+        const common = s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        fallbackMap.set(s, {
+          id: String(fallbackMap.size + 1),
+          common: common,
+          scientific: s,
+          family: "Pinaceae"
+        });
+      });
+    });
+    rawData = Array.from(fallbackMap.values());
+  }
+
+  // 3. Normalize records
+  masterSpecies = rawData.map((item, idx) => ({
+    id: item.id !== undefined ? String(item.id) : String(idx + 1),
+    common: item.common || item.scientific || "Unknown",
+    scientific: item.scientific || item.common || "Unknown Species",
+    family: item.family || (item.familyNum ? `Family #${item.familyNum}` : "Pinaceae"),
+    spinzam_url: item.spinzam_url || null
+  }));
+
+  selectedIds = new Set(masterSpecies.map(sp => sp.id));
+  filteredSpecies = [...masterSpecies];
+  activeSpeciesPool = [...masterSpecies];
+
+  initFuzzySearch();
+  renderSpeciesGrid();
+  renderFamilySidebar();
+  fetchCloudPresets().catch(() => {});
+  updatePoolStatus();
 }
 
 function cacheDOM() {
@@ -116,22 +138,25 @@ function cacheDOM() {
 }
 
 /* ============================================================================
-   FORGIVING FUZZY SEARCH (FUSE.JS) & MODAL SELECTION
+   FORGIVING FUZZY SEARCH (FUSE.JS) & PICKER MODAL
 ============================================================================ */
 
 function initFuzzySearch() {
+  if (typeof Fuse === 'undefined') {
+    console.warn("Fuse.js not loaded, search will fall back to exact matching.");
+    return;
+  }
   const options = {
     keys: [
       { name: 'common', weight: 0.5 },
       { name: 'scientific', weight: 0.35 },
       { name: 'family', weight: 0.15 }
     ],
-    threshold: 0.42,       // Forgiving typo threshold
+    threshold: 0.42,
     distance: 100,
     minMatchCharLength: 2,
     ignoreLocation: true
   };
-
   fuseInstance = new Fuse(masterSpecies, options);
 }
 
@@ -144,14 +169,14 @@ function initSpeciesModal() {
   const clearBtn = document.getElementById('clearSearchBtn');
 
   const openModal = () => {
-    modal.classList.remove('hidden');
-    backdrop.classList.remove('hidden');
+    modal?.classList.remove('hidden');
+    backdrop?.classList.remove('hidden');
     renderSpeciesGrid();
   };
 
   const closeModal = () => {
-    modal.classList.add('hidden');
-    backdrop.classList.add('hidden');
+    modal?.classList.add('hidden');
+    backdrop?.classList.add('hidden');
     syncActivePool();
   };
 
@@ -159,7 +184,6 @@ function initSpeciesModal() {
   closeBtn?.addEventListener('click', closeModal);
   backdrop?.addEventListener('click', closeModal);
 
-  // Debounced search typing
   let debounceTimer;
   searchInput?.addEventListener('input', (e) => {
     clearTimeout(debounceTimer);
@@ -167,8 +191,13 @@ function initSpeciesModal() {
       const q = e.target.value.trim();
       if (!q) {
         filteredSpecies = [...masterSpecies];
-      } else {
+      } else if (fuseInstance) {
         filteredSpecies = fuseInstance.search(q).map(res => res.item);
+      } else {
+        filteredSpecies = masterSpecies.filter(sp => 
+          sp.common.toLowerCase().includes(q.toLowerCase()) || 
+          sp.scientific.toLowerCase().includes(q.toLowerCase())
+        );
       }
       renderSpeciesGrid();
     }, 120);
@@ -180,7 +209,6 @@ function initSpeciesModal() {
     renderSpeciesGrid();
   });
 
-  // Batch actions
   document.getElementById('selectAllFilteredBtn')?.addEventListener('click', () => {
     filteredSpecies.forEach(sp => selectedIds.add(sp.id));
     updatePickerUI();
@@ -199,7 +227,6 @@ function initSpeciesModal() {
     updatePickerUI();
   });
 
-  // Cloudflare Presets
   document.getElementById('savePresetCloudBtn')?.addEventListener('click', savePresetToCloudflare);
   document.getElementById('loadPresetCloudBtn')?.addEventListener('click', loadPresetFromCloudflare);
 }
@@ -214,9 +241,7 @@ function renderSpeciesGrid() {
     return;
   }
 
-  // Slice DOM nodes to maintain smooth scrolling on large sets
   const displaySlice = filteredSpecies.slice(0, 250);
-
   displaySlice.forEach(sp => {
     const label = document.createElement('label');
     label.className = 'species-card-label';
@@ -272,7 +297,7 @@ function renderFamilySidebar() {
     row.querySelector('.fam-name').addEventListener('click', () => {
       const searchInput = document.getElementById('speciesSearchInput');
       if (searchInput) searchInput.value = fam;
-      filteredSpecies = fuseInstance.search(fam).map(r => r.item);
+      filteredSpecies = fuseInstance ? fuseInstance.search(fam).map(r => r.item) : masterSpecies.filter(s => s.family === fam);
       renderSpeciesGrid();
     });
 
@@ -309,7 +334,7 @@ function updatePoolStatus() {
 }
 
 /* ============================================================================
-   CLOUDFLARE KV PRESET INTEGRATION
+   CLOUDFLARE KV PRESETS SYNC
 ============================================================================ */
 
 async function savePresetToCloudflare() {
@@ -388,17 +413,17 @@ function loadPresetFromCloudflare() {
 }
 
 /* ============================================================================
-   QUIZ LOGIC & WORKFLOW
+   QUIZ CONTROLS & BINDINGS
 ============================================================================ */
 
 function initSidebar() {
   const openSidebar = () => {
-    settingsSidebar.classList.add('open');
-    sidebarBackdrop.classList.remove('hidden');
+    settingsSidebar?.classList.add('open');
+    sidebarBackdrop?.classList.remove('hidden');
   };
   const closeSidebar = () => {
-    settingsSidebar.classList.remove('open');
-    sidebarBackdrop.classList.add('hidden');
+    settingsSidebar?.classList.remove('open');
+    sidebarBackdrop?.classList.add('hidden');
   };
 
   document.getElementById('settingsBtn')?.addEventListener('click', openSidebar);
@@ -408,7 +433,6 @@ function initSidebar() {
 }
 
 function initQuizControls() {
-  // Mode selection
   document.querySelectorAll('#modeSelect .mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const allBtns = document.querySelectorAll('#modeSelect .mode-btn');
@@ -419,7 +443,6 @@ function initQuizControls() {
     });
   });
 
-  // Play styles (MC / Typing)
   const quizBtn = document.getElementById('playStyleQuiz');
   const typeBtn = document.getElementById('playStyleTyping');
   const toggleStyle = (btn) => {
@@ -432,7 +455,6 @@ function initQuizControls() {
   quizBtn?.addEventListener('click', () => toggleStyle(quizBtn));
   typeBtn?.addEventListener('click', () => toggleStyle(typeBtn));
 
-  // Question count
   document.querySelectorAll('#countSelect .count-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#countSelect .count-btn').forEach(b => b.classList.remove('active'));
@@ -443,7 +465,6 @@ function initQuizControls() {
     });
   });
 
-  // Choices count
   document.querySelectorAll('#choicesSelect .choice-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#choicesSelect .choice-btn').forEach(b => b.classList.remove('active'));
@@ -452,13 +473,12 @@ function initQuizControls() {
     });
   });
 
-  // Timer slider
   document.getElementById('timeLimitSlider')?.addEventListener('input', (e) => {
     TIME_LIMIT = parseInt(e.target.value, 10);
-    document.getElementById('timeLimitLabel').textContent = TIME_LIMIT + 's';
+    const label = document.getElementById('timeLimitLabel');
+    if (label) label.textContent = TIME_LIMIT + 's';
   });
 
-  // Hardcoded presets
   HARDCODED_PRESETS.forEach(p => {
     document.getElementById(p.id)?.addEventListener('change', () => {
       const want = new Set();
@@ -481,7 +501,6 @@ function initQuizControls() {
     });
   });
 
-  // Launch buttons
   document.getElementById('startBtn')?.addEventListener('click', () => {
     const input = document.getElementById('playerName');
     const entered = (input?.value || '').trim();
@@ -513,8 +532,8 @@ function initQuizControls() {
   nextBtn?.addEventListener('click', nextQuestion);
   document.getElementById('startOverBtn')?.addEventListener('click', launchGame);
   document.getElementById('homeBtn')?.addEventListener('click', () => {
-    endScreen.classList.add('hidden');
-    startScreen.classList.remove('hidden');
+    endScreen?.classList.add('hidden');
+    startScreen?.classList.remove('hidden');
     fetchGlobalLeaderboard();
   });
 
@@ -525,9 +544,9 @@ function initQuizControls() {
 
   document.getElementById('cancelQuizBtn')?.addEventListener('click', () => {
     stopTimer();
-    quizScreen.classList.add('hidden');
-    stats.classList.add('hidden');
-    startScreen.classList.remove('hidden');
+    quizScreen?.classList.add('hidden');
+    stats?.classList.add('hidden');
+    startScreen?.classList.remove('hidden');
     fetchGlobalLeaderboard();
   });
 
@@ -546,6 +565,10 @@ function shuffle(arr) {
   return a;
 }
 
+/* ============================================================================
+   GAME LIFECYCLE
+============================================================================ */
+
 function launchGame() {
   syncActivePool();
   if (activeSpeciesPool.length === 0) {
@@ -559,18 +582,18 @@ function launchGame() {
   score = 0;
   streak = 0;
 
-  startScreen.classList.add('hidden');
-  endScreen.classList.add('hidden');
-  quizScreen.classList.remove('hidden');
-  stats.classList.remove('hidden');
+  startScreen?.classList.add('hidden');
+  endScreen?.classList.add('hidden');
+  quizScreen?.classList.remove('hidden');
+  stats?.classList.remove('hidden');
 
   showQuestion();
 }
 
 function showQuestion() {
-  feedback.classList.add('hidden');
-  nextBtn.classList.add('hidden');
-  optionsEl.innerHTML = '';
+  feedback?.classList.add('hidden');
+  nextBtn?.classList.add('hidden');
+  if (optionsEl) optionsEl.innerHTML = '';
   answered = false;
   hintUsedThisQ = false;
 
@@ -596,14 +619,16 @@ function showQuestion() {
 
   document.getElementById('qNum').textContent = qIndex + 1;
   document.getElementById('totalQ').textContent = TOTAL;
-  progressBar.style.width = ((qIndex / TOTAL) * 100) + '%';
+  if (progressBar) progressBar.style.width = ((qIndex / TOTAL) * 100) + '%';
 
   if (spinBtn) {
     if (sp.spinzam_url) {
       spinBtn.classList.remove('hidden');
       spinBtn.onclick = () => {
-        document.getElementById('imageSlot').innerHTML = `
-          <iframe src="${sp.spinzam_url}" width="100%" height="100%" frameborder="0" scrolling="no" style="border:none;" allowfullscreen></iframe>`;
+        const slot = document.getElementById('imageSlot');
+        if (slot) {
+          slot.innerHTML = `<iframe src="${sp.spinzam_url}" width="100%" height="100%" frameborder="0" scrolling="no" style="border:none;" allowfullscreen></iframe>`;
+        }
       };
     } else {
       spinBtn.classList.add('hidden');
@@ -614,7 +639,7 @@ function showQuestion() {
   const typeInput = document.getElementById('typeAnswerInput');
 
   if (typeAnswerMode) {
-    optionsEl.classList.add('hidden');
+    optionsEl?.classList.add('hidden');
     typeArea?.classList.remove('hidden');
     if (typeInput) {
       typeInput.value = '';
@@ -623,7 +648,7 @@ function showQuestion() {
     }
   } else {
     typeArea?.classList.add('hidden');
-    optionsEl.classList.remove('hidden');
+    optionsEl?.classList.remove('hidden');
 
     let choices = [currentCorrect];
     const distractorPool = masterSpecies
@@ -637,7 +662,7 @@ function showQuestion() {
       btn.className = 'option';
       btn.textContent = opt;
       btn.addEventListener('click', () => selectAnswer(btn, opt));
-      optionsEl.appendChild(btn);
+      optionsEl?.appendChild(btn);
     });
   }
 
@@ -656,32 +681,38 @@ function selectAnswer(btn, chosen) {
   answered = true;
   stopTimer();
 
-  optionsEl.querySelectorAll('.option').forEach(o => o.disabled = true);
+  optionsEl?.querySelectorAll('.option').forEach(o => o.disabled = true);
   const isMatch = chosen.toLowerCase().trim() === currentCorrect.toLowerCase().trim();
 
   if (isMatch) {
     btn.classList.add('correct');
     score++;
     streak++;
-    feedback.textContent = '✓ Correct!';
-    feedback.className = 'feedback correct';
+    if (feedback) {
+      feedback.textContent = '✓ Correct!';
+      feedback.className = 'feedback correct';
+    }
   } else {
     btn.classList.add('wrong');
     streak = 0;
-    optionsEl.querySelectorAll('.option').forEach(o => {
+    optionsEl?.querySelectorAll('.option').forEach(o => {
       if (o.textContent.toLowerCase().trim() === currentCorrect.toLowerCase().trim()) {
         o.classList.add('correct');
       }
     });
-    feedback.textContent = `✗ Wrong — Correct: ${currentCorrect}`;
-    feedback.className = 'feedback wrong';
+    if (feedback) {
+      feedback.textContent = `✗ Wrong — Correct: ${currentCorrect}`;
+      feedback.className = 'feedback wrong';
+    }
   }
 
-  feedback.classList.remove('hidden');
+  feedback?.classList.remove('hidden');
   revealImage();
-  nextBtn.classList.remove('hidden');
-  document.getElementById('score').textContent = score;
-  document.getElementById('streak').textContent = streak;
+  nextBtn?.classList.remove('hidden');
+  const scoreEl = document.getElementById('score');
+  const streakEl = document.getElementById('streak');
+  if (scoreEl) scoreEl.textContent = score;
+  if (streakEl) streakEl.textContent = streak;
 }
 
 function nextQuestion() {
@@ -693,11 +724,15 @@ function nextQuestion() {
   }
 }
 
+/* ============================================================================
+   CLOUDFLARE KV LEADERBOARD
+============================================================================ */
+
 async function endQuiz() {
   stopTimer();
-  quizScreen.classList.add('hidden');
-  stats.classList.add('hidden');
-  endScreen.classList.remove('hidden');
+  quizScreen?.classList.add('hidden');
+  stats?.classList.add('hidden');
+  endScreen?.classList.remove('hidden');
 
   const pct = Math.round((score / TOTAL) * 100) || 0;
   const msgEl = document.getElementById('endMsg');
@@ -747,10 +782,20 @@ async function endQuiz() {
 
 async function fetchGlobalLeaderboard() {
   const listEl = document.getElementById('leaderboardList');
-  if (!WORKER_API || !listEl) return;
+  if (!listEl) return;
+
+  if (!WORKER_API) {
+    listEl.innerHTML = '<div class="lb-loading">No Cloudflare Worker URL configured.</div>';
+    return;
+  }
 
   try {
-    const res = await fetch(`${WORKER_API}/api/leaderboard`);[cite: 2, 3]
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const res = await fetch(`${WORKER_API}/api/leaderboard`, { signal: controller.signal });[cite: 2, 3]
+    clearTimeout(timeoutId);
+
     if (!res.ok) throw new Error("Leaderboard unreachable");
     const data = await res.json();
 
@@ -771,7 +816,7 @@ async function fetchGlobalLeaderboard() {
       listEl.innerHTML = '<div class="lb-loading">No scores recorded yet. Be the first!</div>';
     }
   } catch (err) {
-    listEl.innerHTML = '<div class="lb-loading">Leaderboard offline. Play as guest or check Cloudflare.</div>';
+    listEl.innerHTML = '<div class="lb-loading">Cloudflare KV offline. You can still play!</div>';
   }
 }
 
@@ -797,6 +842,10 @@ function startTimer() {
     }
   }, 1000);
 }
+
+/* ============================================================================
+   IMAGE LOADER & RESIZER
+============================================================================ */
 
 async function loadPhoto(sp) {
   const slot = document.getElementById('imageSlot');
@@ -835,7 +884,7 @@ async function loadPhoto(sp) {
   };
 
   imgTest.onerror = async () => {
-    // Secondary: iNaturalist Dynamic Taxa Lookup
+    // Secondary: iNaturalist Lookup
     try {
       const res = await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sciClean)}&per_page=1`);[cite: 1]
       const data = await res.json();[cite: 1]
