@@ -36,7 +36,7 @@ body {
   z-index: 999;
 }
 
-/* APP SHELL & CARDS */
+/* APP SHELL */
 .app-container {
   width: 100%;
   max-width: 640px;
@@ -225,7 +225,7 @@ body {
   padding: 12px 0;
 }
 
-/* QUIZ RUNTIME & RESIZABLE VIEWER */
+/* ACTIVE QUIZ SCREEN */
 .stats {
   position: fixed;
   top: 10px;
@@ -495,7 +495,7 @@ body {
   gap: 10px;
 }
 
-/* SIDEBAR CONTROLS */
+/* SIDEBAR SETTINGS */
 .sidebar-backdrop, .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -593,7 +593,7 @@ body {
   cursor: pointer;
 }
 
-/* FORGIVING SPECIES PICKER & CLOUDFLARE PRESETS MODAL */
+/* WIDE MODAL FOR FORGIVING SEARCH & PRESETS */
 .wide-card {
   position: fixed;
   top: 50%;
