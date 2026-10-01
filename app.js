@@ -9,6 +9,47 @@
 const CLOUDFLARE_R2_BASE = "https://pub-7c8f1ea1e424248a09ee567dfbcdedf.r2.dev";
 const WORKER_API = "https://quiz.jonathantt.workers.dev"; // Confirmed Worker endpoint
 
+/* ============================================================================
+   MULTI-DATABASE LOADER (VT Dendro, Ohio State, Arbor Day)
+   ============================================================================ */
+
+const DATABASES = {
+  vt: "VTDendroSpecies.json",
+  osu: "OSUSpecies.json",
+  arborday: "Arbor_DaySpecies.json",
+  all: "all"
+};
+
+let currentDatabase = "vt";
+let masterSpecies = [];
+
+export async function loadDatabase(dbKey = "vt") {
+  currentDatabase = dbKey;
+  
+  if (dbKey === "all") {
+    // Merge all three databases
+    const [vtRes, osuRes, arborRes] = await Promise.all([
+      fetch("./VTDendroSpecies.json").then(r => r.json()),
+      fetch("./OSUSpecies.json").then(r => r.json()),
+      fetch("./Arbor_DaySpecies.json").then(r => r.json())
+    ]);
+    
+    // Tag each entry with its database origin
+    vtRes.forEach(s => s.source = "VT Dendrology");
+    osuRes.forEach(s => s.source = "Ohio State ENR 3321");
+    arborRes.forEach(s => s.source = "Arbor Day Foundation");
+
+    masterSpecies = [...vtRes, ...osuRes, ...arborRes];
+  } else {
+    const filename = DATABASES[dbKey] || "VTDendroSpecies.json";
+    const res = await fetch(`./${filename}`);
+    masterSpecies = await res.json();
+  }
+
+  console.log(`Loaded ${masterSpecies.length} species from ${dbKey.toUpperCase()} database.`);
+  return masterSpecies;
+}
+
 let masterSpecies = [];
 let activeSpeciesPool = [];
 let selectedIds = new Set();
