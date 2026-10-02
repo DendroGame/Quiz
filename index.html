@@ -38,18 +38,19 @@
     </div>
     
     <div class="sidebar-content">
+      <!-- v1.0.5.M – Species Database source selector -->
+      <div class="set-row">
+        <span class="label">Species Database</span>
+        <div class="mode-select" id="databaseSelect">
+          <button type="button" class="mode-btn active" data-db="vt">VT Dendrology</button>
+          <button type="button" class="mode-btn" data-db="osu">OSU</button>
+          <button type="button" class="mode-btn" data-db="arborday">Arbor Day</button>
+          <button type="button" class="mode-btn" data-db="inat">iNaturalist</button>
+        </div>
+        <p id="dbStatusNote" class="guest-notice" style="margin-top:6px;">Loading…</p>
+      </div>
+
       <!-- Quiz Mode: Sci→Common / Common→Sci / Family Names (multi-select) -->
-      <!-- v1.0.5.M – Database source selector -->
-<div class="set-row">
-  <span class="label">Species Database</span>
-  <div class="mode-select" id="databaseSelect">
-    <button type="button" class="mode-btn active" data-db="vt">VT Dendrology</button>
-    <button type="button" class="mode-btn" data-db="osu">OSU</button>
-    <button type="button" class="mode-btn" data-db="arborday">Arbor Day</button>
-    <button type="button" class="mode-btn" data-db="inat">iNaturalist</button>
-  </div>
-  <p id="dbStatusNote" class="guest-notice" style="margin-top:6px;">VT Dendrology loaded</p>
-</div>
       <div class="set-row">
         <span class="label">Quiz Mode</span>
         <div class="mode-select" id="modeSelect">
