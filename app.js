@@ -125,6 +125,38 @@ async function initApplication() {
 async function loadDatabase(dbKey) {
   const db = DATABASES[dbKey] || DATABASES.vt;
   currentDatabase = dbKey;
+   /* v1.0.5.M – handle live iNaturalist source */
+if (db.type === "api" && dbKey === "inat") {
+  const note = document.getElementById("dbStatusNote");
+  if (note) note.textContent = "iNaturalist: using live taxa search + photos…";
+
+  // Keep whatever species are already loaded (or the fallback list)
+  // so the quiz still has a usable pool. Photos will prefer iNaturalist.
+  if (masterSpecies.length === 0) {
+    // minimal fallback so the app never starts empty
+    masterSpecies = [{
+      id: "1",
+      common: "Red Maple",
+      scientific: "Acer rubrum",
+      family: "Sapindaceae",
+      spinzam_url: null
+    }];
+  }
+
+  selectedIds = new Set(masterSpecies.map(sp => sp.id));
+  filteredSpecies = [...masterSpecies];
+  activeSpeciesPool = [...masterSpecies];
+  initFuzzySearch();
+  renderSpeciesGrid();
+  renderFamilySidebar();
+  updatePoolStatus();
+
+  if (note) note.textContent = `iNaturalist (live): ${masterSpecies.length} species ready`;
+  document.querySelectorAll("#databaseSelect .mode-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.db === dbKey);
+  });
+  return;   // skip the normal JSON loading path
+}
 
   const note = document.getElementById("dbStatusNote");
   if (note) note.textContent = `Loading ${db.label}…`;
@@ -143,6 +175,12 @@ async function loadDatabase(dbKey) {
       console.warn("Failed to load", path, e);
     }
   }
+   /* v1.0.5.M – iNaturalist live API option */
+inat: {
+  label: "iNaturalist (live)",
+  type: "api",          // special flag so loadDatabase knows it is not a local JSON
+  files: []             // no local files
+},
 
   // Optional bud-scan map (Spinzam embeds, VT only)
   budScanMap = {};
