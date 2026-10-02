@@ -1,61 +1,64 @@
 /* ============================================================================
-   VIRGINIA TECH MASTER DENDROLOGY ENGINE — js/app.js
-   - Resilient database loader with built-in fallback
-   - Forgiving Fuzzy Search (Fuse.js)
-   - Cloudflare Worker KV Presets & Leaderboard sync
-   - Diagnostic Specimen Image Pipeline + Resizable Viewer
+   VIRGINIA TECH MASTER DENDROLOGY ENGINE — app.js
+   Purpose: Entire quiz logic – data loading, settings, species picker,
+            game loop, leaderboard, image loading, timer.
+   Sections (search for these banners to jump to a feature):
+     1. CONFIG & GLOBAL STATE
+     2. INIT / BOOTSTRAP
+     3. DATABASE LOADER
+     4. DOM CACHE
+     5. FUZZY SEARCH & SPECIES PICKER MODAL
+     6. CLOUDFLARE PRESETS
+     7. QUIZ SETTINGS SIDEBAR & CONTROLS
+     8. GAME LIFECYCLE (launch / showQuestion / answer / next / end)
+     9. LEADERBOARD
+    10. TIMER
+    11. IMAGE LOADER & RESIZER
 ============================================================================ */
 
+/* --------------------------------------------------------------------------
+   1. CONFIG & GLOBAL STATE
+   Constants and mutable state shared across the whole app.
+   -------------------------------------------------------------------------- */
+
+/** Public R2 base for diagnostic photos (used by loadPhoto) */
 const CLOUDFLARE_R2_BASE = "https://pub-7c8f1ea1e424248a09ee567dfbcdedf.r2.dev";
-const WORKER_API = "https://quiz.jonathantt.workers.dev"; // Confirmed Worker endpoint
+/** Cloudflare Worker that stores leaderboard + presets in KV */
+const WORKER_API = "https://quiz.jonathantt.workers.dev";
 
-/* ============================================================================
-   MULTI-DATABASE LOADER (VT Dendro, Ohio State, Arbor Day)
-   ============================================================================ */
-
+/**
+ * Available species databases. Each entry lists JSON files to try (first
+ * success wins) and an optional bud-scan map (Spinzam URLs keyed by id).
+ * Files are expected next to index.html (or under data/).
+ */
 const DATABASES = {
-  vt: "VTDendroSpecies.json",
-  osu: "OSUSpecies.json",
-  arborday: "Arbor_DaySpecies.json",
-  all: "all"
+  vt: {
+    label: "VT Dendrology",
+    files: ["./VTDendroSpecies.json", "./species.json"],
+    budScan: "./VTBudScan.json"
+  },
+  osu: {
+    label: "OSU",
+    files: ["./OSUspecies.json"]
+  },
+  arborday: {
+    label: "Arbor Day",
+    files: ["./Arbor_DaySpecies.json"]
+  }
 };
 
-let currentDatabase = "vt";
-let masterSpecies = [];
+let currentDatabase = "vt";          // which DB is currently loaded
+let masterSpecies = [];              // full list after normalize
+let activeSpeciesPool = [];          // subset currently selected for quizzes
+let selectedIds = new Set();         // ids checked in the picker
+let filteredSpecies = [];            // current search results
+let fuseInstance = null;             // Fuse.js instance for fuzzy search
+let budScanMap = {};                 // id → Spinzam embed URL
 
-export async function loadDatabase(dbKey = "vt") {
-  currentDatabase = dbKey;
-  
-  if (dbKey === "all") {
-    // Merge all three databases
-    const [vtRes, osuRes, arborRes] = await Promise.all([
-      fetch("./VTDendroSpecies.json").then(r => r.json()),
-      fetch("./OSUSpecies.json").then(r => r.json()),
-      fetch("./Arbor_DaySpecies.json").then(r => r.json())
-    ]);
-    
-    // Tag each entry with its database origin
-    vtRes.forEach(s => s.source = "VT Dendrology");
-    osuRes.forEach(s => s.source = "Ohio State ENR 3321");
-    arborRes.forEach(s => s.source = "Arbor Day Foundation");
-
-    masterSpecies = [...vtRes, ...osuRes, ...arborRes];
-  } else {
-    const filename = DATABASES[dbKey] || "VTDendroSpecies.json";
-    const res = await fetch(`./${filename}`);
-    masterSpecies = await res.json();
-  }
-
-  console.log(`Loaded ${masterSpecies.length} species from ${dbKey.toUpperCase()} database.`);
-  return masterSpecies;
-}
-
-let masterSpecies = [];
-let activeSpeciesPool = [];
-let selectedIds = new Set();
-let filteredSpecies = [];
-let fuseInstance = null;
-
+/**
+ * Lab test lists hardcoded by scientific name. Checking a toggle in Settings
+ * filters selectedIds down to matching species (or restores all if none checked).
+ */
 const HARDCODED_PRESETS = [
   { id: 'quizTest1Toggle', sci: ["asimina triloba","ilex opaca","robinia pseudoacacia","juglans nigra","sassafras albidum","lindera benzoin","liriodendron tulipifera","fraxinus americana","paulownia tomentosa","pinus strobus","tsuga canadensis","platanus occidentalis","acer saccharum","acer negundo","aesculus flava","parthenocissus quinquefolia","toxicodendron radicans","carpinus caroliniana","elaeagnus umbellate","reynoutria japonica"] },
   { id: 'quizTest2Toggle', sci: ["cercis canadensis","quercus alba","quercus montana","quercus coccinea","quercus marilandica","prunus serotina","pyrus calleryana","acer platanoides","ailanthus altissima","tilia americana"] },
@@ -64,34 +67,38 @@ const HARDCODED_PRESETS = [
   { id: 'quizTest5Toggle', sci: ["malus pumila","pinus taeda","quercus phellos","hedera helix","catalpa speciosa","cornus kousa","carya glabra var.glabra","fraxinus pennsylvanica","rubus phoenicolasius","ulmus rubra","rosa multiflora","cupressocyparis leylandii","acer saccharinum"] }
 ];
 
-// Quiz Config
-let TIME_LIMIT = 15;
-let TOTAL = 10;
-let NUM_CHOICES = 4;
+/* --- Quiz configuration (mutated by Settings sidebar) --- */
+let TIME_LIMIT = 15;                 // seconds per question
+let TOTAL = 10;                     // questions per run
+let NUM_CHOICES = 4;                 // multiple-choice options
 let playerName = '';
 let isGuest = false;
 
-let selectedModes = ['sci-to-common'];
-let selectedStyles = ['quiz'];
-let currentMode = 'sci-to-common';
-let typeAnswerMode = false;
+let selectedModes = ['sci-to-common']; // active quiz modes (can be multi)
+let selectedStyles = ['quiz'];         // 'quiz' | 'typing'
+let currentMode = 'sci-to-common';     // mode chosen for the current question
+let typeAnswerMode = false;            // true when current Q is typing style
 
-// Round State
+/* --- Per-round state --- */
 let score = 0;
 let streak = 0;
 let qIndex = 0;
-let currentCorrect = '';
-let questions = [];
+let currentCorrect = '';             // the correct answer string for this Q
+let questions = [];                  // shuffled slice of activeSpeciesPool
 let timerId = null;
 let timeLeft = TIME_LIMIT;
 let answered = false;
 let hintUsedThisQ = false;
 
-// DOM Cache
+/* --- Cached DOM nodes (filled by cacheDOM) --- */
 let startScreen, quizScreen, endScreen, stats, promptEl, promptLabel;
 let optionsEl, feedback, nextBtn, progressBar, timerBar, timerText, speciesImg;
 let imgPlaceholder, imgLoading, spinBtn, settingsSidebar, sidebarBackdrop;
 
+/* --------------------------------------------------------------------------
+   2. INIT / BOOTSTRAP
+   Entry point: wire everything, load default DB, fetch leaderboard.
+   -------------------------------------------------------------------------- */
 document.addEventListener('DOMContentLoaded', initApplication);
 
 async function initApplication() {
@@ -100,31 +107,64 @@ async function initApplication() {
   initQuizControls();
   initSpeciesModal();
   initImageResizer();
+  initDatabaseSelector();
   
-  // Non-blocking leaderboard fetch
+  // Non-blocking leaderboard fetch (failure is fine – user can still play)
   fetchGlobalLeaderboard().catch(() => {});
+
+  // Load default database (VT Dendrology)
+  await loadDatabase("vt");
+  fetchCloudPresets().catch(() => {});
+}
+
+/* --------------------------------------------------------------------------
+   3. DATABASE LOADER
+   Tries listed JSON files for the chosen source, normalizes records,
+   builds Fuse index, and refreshes the picker UI.
+   -------------------------------------------------------------------------- */
+async function loadDatabase(dbKey) {
+  const db = DATABASES[dbKey] || DATABASES.vt;
+  currentDatabase = dbKey;
+
+  const note = document.getElementById("dbStatusNote");
+  if (note) note.textContent = `Loading ${db.label}…`;
 
   let rawData = null;
 
-  // 1. Fetch species.json (try root first, then data/ folder)
-  try {
-    let res = await fetch('./species.json');
-    if (!res.ok) res = await fetch('./data/species.json');
-    if (res.ok) rawData = await res.json();
-  } catch (e) {
-    console.warn("Could not load external species.json, using fallback lab presets.", e);
+  // Try each candidate file until one succeeds
+  for (const path of db.files) {
+    try {
+      const res = await fetch(path);
+      if (res.ok) {
+        rawData = await res.json();
+        break;
+      }
+    } catch (e) {
+      console.warn("Failed to load", path, e);
+    }
   }
 
-  // 2. Safe Fallback if file is missing or failed
+  // Optional bud-scan map (Spinzam embeds, VT only)
+  budScanMap = {};
+  if (db.budScan) {
+    try {
+      const res = await fetch(db.budScan);
+      if (res.ok) budScanMap = await res.json();
+    } catch (e) {
+      console.warn("Bud scan map not loaded", e);
+    }
+  }
+
+  // Fallback to hardcoded lab list if nothing loaded
   if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
     console.warn("Activating built-in preset fallback dataset.");
     const fallbackMap = new Map();
     HARDCODED_PRESETS.forEach(p => {
       p.sci.forEach(s => {
-        const common = s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        const common = s.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
         fallbackMap.set(s, {
           id: String(fallbackMap.size + 1),
-          common: common,
+          common,
           scientific: s,
           family: "Pinaceae"
         });
@@ -133,14 +173,35 @@ async function initApplication() {
     rawData = Array.from(fallbackMap.values());
   }
 
-  // 3. Normalize records
-  masterSpecies = rawData.map((item, idx) => ({
-    id: item.id !== undefined ? String(item.id) : String(idx + 1),
-    common: item.common || item.scientific || "Unknown",
-    scientific: item.scientific || item.common || "Unknown Species",
-    family: item.family || (item.familyNum ? `Family #${item.familyNum}` : "Pinaceae"),
-    spinzam_url: item.spinzam_url || null
-  }));
+  // Normalize every record into a common shape
+  masterSpecies = rawData
+    .map((item, idx) => {
+      const scientific = (item.scientific || "").trim();
+      const common = (item.common || "").trim();
+      // Skip Arbor Day entries that have no usable name
+      if (!scientific && !common) return null;
+      if (dbKey === "arborday" && !scientific) return null; // keep only real species
+
+      const id = item.id !== undefined ? String(item.id)
+               : item.vtId !== undefined ? String(item.vtId)
+               : item.arborday_id !== undefined ? String(item.arborday_id)
+               : String(idx + 1);
+
+      let spinzam = item.spinzam_url || null;
+      if (!spinzam && budScanMap[id]) spinzam = budScanMap[id];
+      if (!spinzam && item.vtId && budScanMap[String(item.vtId)]) {
+        spinzam = budScanMap[String(item.vtId)];
+      }
+
+      return {
+        id,
+        common: common || scientific || "Unknown",
+        scientific: scientific || common || "Unknown Species",
+        family: item.family || item.family_modern || (item.familyNum ? `Family #${item.familyNum}` : "Unknown"),
+        spinzam_url: spinzam
+      };
+    })
+    .filter(Boolean);
 
   selectedIds = new Set(masterSpecies.map(sp => sp.id));
   filteredSpecies = [...masterSpecies];
@@ -149,10 +210,35 @@ async function initApplication() {
   initFuzzySearch();
   renderSpeciesGrid();
   renderFamilySidebar();
-  fetchCloudPresets().catch(() => {});
   updatePoolStatus();
+
+  if (note) {
+    note.textContent = `${db.label}: ${masterSpecies.length} species ready`;
+  }
+
+  // Update active button styling
+  document.querySelectorAll("#databaseSelect .mode-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.db === dbKey);
+  });
 }
 
+function initDatabaseSelector() {
+  document.querySelectorAll("#databaseSelect .mode-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const key = btn.dataset.db;
+      if (key === currentDatabase) return;
+      // Visual feedback
+      document.querySelectorAll("#databaseSelect .mode-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      await loadDatabase(key);
+    });
+  });
+}
+
+/* --------------------------------------------------------------------------
+   4. DOM CACHE
+   Grabs frequently used elements once so we avoid repeated getElementById.
+   -------------------------------------------------------------------------- */
 function cacheDOM() {
   startScreen = document.getElementById('startScreen');
   quizScreen = document.getElementById('quizScreen');
@@ -178,6 +264,11 @@ function cacheDOM() {
    FORGIVING FUZZY SEARCH (FUSE.JS) & PICKER MODAL
 ============================================================================ */
 
+/* --------------------------------------------------------------------------
+   5. FUZZY SEARCH & SPECIES PICKER MODAL
+   Fuse.js setup, modal open/close, search debounce, bulk select,
+   family sidebar, grid render, active-pool sync.
+   -------------------------------------------------------------------------- */
 function initFuzzySearch() {
   if (typeof Fuse === 'undefined') {
     console.warn("Fuse.js not loaded, search will fall back to exact matching.");
@@ -374,6 +465,11 @@ function updatePoolStatus() {
    CLOUDFLARE KV PRESETS SYNC
 ============================================================================ */
 
+/* --------------------------------------------------------------------------
+   6. CLOUDFLARE PRESETS
+   Save current selection to Worker KV and load any saved preset back into
+   the picker. Requires WORKER_API to be reachable.
+   -------------------------------------------------------------------------- */
 async function savePresetToCloudflare() {
   if (selectedIds.size === 0) {
     alert("Select at least 1 species to create a preset.");
@@ -453,6 +549,11 @@ function loadPresetFromCloudflare() {
    QUIZ CONTROLS & BINDINGS
 ============================================================================ */
 
+/* --------------------------------------------------------------------------
+   7. QUIZ SETTINGS SIDEBAR & CONTROLS
+   Open/close sidebar, mode/style/count/choices/timer toggles,
+   hardcoded lab-preset checkboxes, Start/Guest/Ultimate buttons.
+   -------------------------------------------------------------------------- */
 function initSidebar() {
   const openSidebar = () => {
     settingsSidebar?.classList.add('open');
@@ -606,6 +707,11 @@ function shuffle(arr) {
    GAME LIFECYCLE
 ============================================================================ */
 
+/* --------------------------------------------------------------------------
+   8. GAME LIFECYCLE
+   launchGame → showQuestion → selectAnswer / handleTypedAnswer → nextQuestion
+   → endQuiz. Also contains the Fisher-Yates shuffle helper.
+   -------------------------------------------------------------------------- */
 function launchGame() {
   syncActivePool();
   if (activeSpeciesPool.length === 0) {
@@ -765,6 +871,10 @@ function nextQuestion() {
    CLOUDFLARE KV LEADERBOARD
 ============================================================================ */
 
+/* --------------------------------------------------------------------------
+   9. LEADERBOARD (Cloudflare KV)
+   endQuiz posts the score; fetchGlobalLeaderboard paints the Hall of Fame.
+   -------------------------------------------------------------------------- */
 async function endQuiz() {
   stopTimer();
   quizScreen?.classList.add('hidden');
@@ -857,6 +967,11 @@ async function fetchGlobalLeaderboard() {
   }
 }
 
+/* --------------------------------------------------------------------------
+   10. TIMER
+   startTimer / stopTimer / updateTimerDisplay – auto-submits empty answer
+   when time hits zero.
+   -------------------------------------------------------------------------- */
 function updateTimerDisplay() {
   if (timerText) timerText.textContent = timeLeft;
   if (timerBar) timerBar.style.width = (timeLeft / TIME_LIMIT * 100) + '%';
@@ -884,6 +999,11 @@ function startTimer() {
    IMAGE LOADER & RESIZER
 ============================================================================ */
 
+/* --------------------------------------------------------------------------
+   11. IMAGE LOADER & RESIZER
+   Tries R2 diagnostic photo first, falls back to iNaturalist, reveals on
+   hint or after answer. initImageResizer lets the user drag the image height.
+   -------------------------------------------------------------------------- */
 async function loadPhoto(sp) {
   const slot = document.getElementById('imageSlot');
   if (slot && !slot.querySelector('#speciesImg')) {

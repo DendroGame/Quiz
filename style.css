@@ -1,16 +1,31 @@
+/* ============================================================================
+   DENDROLOGY MASTER QUIZ — style.css
+   Purpose: All visual styling. Green-dominant dark theme.
+   Main color: --accent (#3d8b6e). Darker greens for contrast.
+   Sections below map 1-to-1 to UI areas so you know exactly where
+   to edit when fixing layout, colors, or spacing.
+============================================================================ */
+
+/* --------------------------------------------------------------------------
+   1. CSS CUSTOM PROPERTIES (theme tokens)
+   Change these to recolor the whole app without hunting through rules.
+   -------------------------------------------------------------------------- */
 :root {
-  --bg: #0f1a14;
-  --card: #182820;
-  --option-bg: #21352b;
-  --text: #e2f0d9;
-  --muted: #8aa899;
-  --accent: #3d8b6e;
-  --accent-light: #52a987;
-  --gold: #d4a742;
-  --danger: #cf4d4d;
-  --border-subtle: rgba(61, 139, 110, 0.3);
+  --bg: #0f1a14;                 /* page background – darkest green-black */
+  --card: #182820;               /* card / panel background */
+  --option-bg: #21352b;          /* option buttons, inputs, pills */
+  --text: #e2f0d9;               /* primary readable text */
+  --muted: #8aa899;              /* secondary / helper text */
+  --accent: #3d8b6e;             /* primary action green */
+  --accent-light: #52a987;       /* hover / lighter accent */
+  --gold: #d4a742;               /* streak, rank, timer highlights */
+  --danger: #cf4d4d;             /* quit / error / wrong-answer red */
+  --border-subtle: rgba(61, 139, 110, 0.3); /* soft green borders */
 }
 
+/* --------------------------------------------------------------------------
+   2. GLOBAL RESET & BASE
+   -------------------------------------------------------------------------- */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -29,6 +44,7 @@ body {
   overflow-x: hidden;
 }
 
+/* Confetti canvas sits on top of everything but never intercepts clicks */
 #confettiCanvas {
   position: fixed;
   inset: 0;
@@ -36,10 +52,12 @@ body {
   z-index: 999;
 }
 
-/* APP SHELL */
+/* --------------------------------------------------------------------------
+   3. APP SHELL – main container & generic card
+   -------------------------------------------------------------------------- */
 .app-container {
   width: 100%;
-  max-width: 640px;
+  max-width: 640px;              /* keeps quiz readable on large screens */
 }
 
 .card {
@@ -50,6 +68,9 @@ body {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 
+/* --------------------------------------------------------------------------
+   4. HOME / START SCREEN header & brand
+   -------------------------------------------------------------------------- */
 .home-head {
   display: flex;
   justify-content: space-between;
@@ -59,7 +80,7 @@ body {
 
 .brand h1 {
   font-size: 1.5rem;
-  color: #a8e0c4;
+  color: #a8e0c4;                /* light mint for title */
 }
 
 .subtitle {
@@ -68,6 +89,7 @@ body {
   margin-top: 4px;
 }
 
+/* Gear & “Pick Species” buttons in the home header */
 .btn-gear-head, .btn-preset-open {
   background: var(--option-bg);
   border: 1px solid var(--border-subtle);
@@ -79,6 +101,9 @@ body {
   font-weight: 600;
 }
 
+/* --------------------------------------------------------------------------
+   5. PLAYER NAME CARD
+   -------------------------------------------------------------------------- */
 .player-card {
   margin-bottom: 20px;
 }
@@ -107,6 +132,9 @@ body {
   margin-top: 6px;
 }
 
+/* --------------------------------------------------------------------------
+   6. MAIN ACTION BUTTONS (Start / Guest / Ultimate)
+   -------------------------------------------------------------------------- */
 .action-grid {
   display: flex;
   flex-direction: column;
@@ -144,7 +172,9 @@ body {
   color: #fff;
 }
 
-/* LEADERBOARD CARD */
+/* --------------------------------------------------------------------------
+   7. GLOBAL LEADERBOARD CARD
+   -------------------------------------------------------------------------- */
 .leaderboard-card {
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--border-subtle);
@@ -225,7 +255,9 @@ body {
   padding: 12px 0;
 }
 
-/* ACTIVE QUIZ SCREEN */
+/* --------------------------------------------------------------------------
+   8. ACTIVE QUIZ – floating stats bar (score / Q / streak / abort)
+   -------------------------------------------------------------------------- */
 .stats {
   position: fixed;
   top: 10px;
@@ -261,6 +293,9 @@ body {
   cursor: pointer;
 }
 
+/* --------------------------------------------------------------------------
+   9. QUIZ PROGRESS BAR & TIMER
+   -------------------------------------------------------------------------- */
 .progress {
   height: 4px;
   background: rgba(255, 255, 255, 0.08);
@@ -295,6 +330,9 @@ body {
   background: var(--gold);
 }
 
+/* --------------------------------------------------------------------------
+   10. IMAGE VIEWER (specimen photo + resize handle)
+   -------------------------------------------------------------------------- */
 .image-wrap {
   position: relative;
   height: 240px;
@@ -350,6 +388,9 @@ body {
   user-select: none;
 }
 
+/* --------------------------------------------------------------------------
+   11. PROMPT CONTROLS (Reveal Specimen / 3D Scan) & QUESTION PROMPT
+   -------------------------------------------------------------------------- */
 .prompt-controls {
   display: flex;
   gap: 8px;
@@ -383,6 +424,9 @@ body {
   color: #a8e0c4;
 }
 
+/* --------------------------------------------------------------------------
+   12. MULTIPLE-CHOICE OPTIONS & FEEDBACK
+   -------------------------------------------------------------------------- */
 .options {
   display: flex;
   flex-direction: column;
@@ -447,6 +491,7 @@ body {
   cursor: pointer;
 }
 
+/* Typing-mode answer input */
 .type-answer-input {
   width: 100%;
   padding: 12px;
@@ -457,7 +502,9 @@ body {
   font-size: 0.95rem;
 }
 
-/* RESULTS */
+/* --------------------------------------------------------------------------
+   13. END / RESULTS SCREEN
+   -------------------------------------------------------------------------- */
 .end-screen {
   text-align: center;
   padding: 20px 0;
@@ -495,7 +542,9 @@ body {
   gap: 10px;
 }
 
-/* SIDEBAR SETTINGS */
+/* --------------------------------------------------------------------------
+   14. SETTINGS SIDEBAR (slides in from right)
+   -------------------------------------------------------------------------- */
 .sidebar-backdrop, .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -507,7 +556,7 @@ body {
 .settings-sidebar {
   position: fixed;
   top: 0;
-  right: -320px;
+  right: -320px;                 /* hidden off-screen until .open */
   width: 320px;
   height: 100vh;
   background: var(--card);
@@ -593,7 +642,9 @@ body {
   cursor: pointer;
 }
 
-/* WIDE MODAL FOR FORGIVING SEARCH & PRESETS */
+/* --------------------------------------------------------------------------
+   15. SPECIES PICKER / PRESET MODAL (wide card)
+   -------------------------------------------------------------------------- */
 .wide-card {
   position: fixed;
   top: 50%;
@@ -811,10 +862,14 @@ body {
   color: var(--muted);
 }
 
+/* Utility – hide any element */
 .hidden {
   display: none !important;
 }
 
+/* --------------------------------------------------------------------------
+   16. RESPONSIVE – stack picker on small screens
+   -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
   .picker-body {
     flex-direction: column;
