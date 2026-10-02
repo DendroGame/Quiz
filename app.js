@@ -24,8 +24,9 @@
 /** Public R2 base for diagnostic photos (used by loadPhoto) */
 const CLOUDFLARE_R2_BASE = "https://pub-7c8f1ea1e424248a09ee567dfbcdedf.r2.dev";
 /** Cloudflare Worker that stores leaderboard + presets in KV */
-const WORKER_API = "https://quiz.jonathantt.workers.dev";
+/* v1.0.7.M – corrected Worker URL */
 const WORKER_API = "https://quiz-api.jonathantate-ent.workers.dev";
+
 /**
  * Available species databases. Each entry lists JSON files to try (first
  * success wins) and an optional bud-scan map (Spinzam URLs keyed by id).
