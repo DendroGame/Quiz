@@ -38,15 +38,11 @@
     </div>
     
     <div class="sidebar-content">
-      <!-- v1.0.5.M – Species Database source selector -->
+      <!-- v1.0.11.M – Reorderable database priority (top = pull first) -->
       <div class="set-row">
-        <span class="label">Species Database</span>
-        <div class="mode-select" id="databaseSelect">
-          <button type="button" class="mode-btn active" data-db="vt">VT Dendrology</button>
-          <button type="button" class="mode-btn" data-db="osu">OSU</button>
-          <button type="button" class="mode-btn" data-db="arborday">Arbor Day</button>
-          <button type="button" class="mode-btn" data-db="inat">iNaturalist</button>
-        </div>
+        <span class="label">Database priority</span>
+        <p class="guest-notice" style="margin-bottom:6px;">Top is used first, then the next, and so on. Drag rows or use ▲ ▼. Check = include.</p>
+        <div id="dbPriorityList" class="db-priority-list"></div>
         <p id="dbStatusNote" class="guest-notice" style="margin-top:6px;">Loading…</p>
       </div>
 
@@ -101,15 +97,6 @@
         <input type="range" id="timeLimitSlider" min="5" max="60" value="15" step="5" class="slider" />
       </div>
 
-      <!-- Hardcoded lab presets – checking one filters the active pool to that list -->
-      <div class="set-row">
-        <span class="label">Hardcoded Lab Presets</span>
-        <label class="chk-label"><input type="checkbox" id="quizTest1Toggle" /> Quiz Test #1</label>
-        <label class="chk-label"><input type="checkbox" id="quizTest2Toggle" /> Quiz Test #2</label>
-        <label class="chk-label"><input type="checkbox" id="quizTest3Toggle" /> Quiz Test #3</label>
-        <label class="chk-label"><input type="checkbox" id="quizTest4Toggle" /> Quiz Test #4</label>
-        <label class="chk-label"><input type="checkbox" id="quizTest5Toggle" /> Quiz Test #5</label>
-      </div>
     </div>
   </aside>
 
@@ -157,19 +144,47 @@
       </main>
     </div>
 
-    <!-- Cloudflare KV preset save / load toolbar -->
+    <!-- v1.0.9.M – Add species if not found -->
+    <div class="add-species-bar">
+      <span class="label">Not in list? Add species</span>
+      <div class="add-species-row">
+        <input type="text" id="addCommonInput" placeholder="Common name" maxlength="60">
+        <input type="text" id="addSciInput" placeholder="Scientific name" maxlength="80">
+        <input type="text" id="addFamilyInput" placeholder="Family (optional)" maxlength="40">
+        <button type="button" id="addSpeciesBtn" class="btn-primary">+ Add</button>
+      </div>
+      <p class="guest-notice">Adds to the current selection. Use Save / Update preset to keep it.</p>
+    </div>
+
+    <!-- Cloudflare presets: list with ⋮ menu (Load / Edit / Common names) -->
     <div class="preset-footer">
       <div class="preset-save-box">
         <input type="text" id="presetTitleInput" placeholder="Preset name (e.g. Lab 4 Oaks)" maxlength="32">
         <input type="text" id="presetAuthorInput" placeholder="Your name" maxlength="20">
-        <button type="button" id="savePresetCloudBtn" class="btn-primary">☁️ Save to Cloudflare</button>
+        <button type="button" id="savePresetCloudBtn" class="btn-primary">☁️ Save as new</button>
+        <button type="button" id="updatePresetCloudBtn" class="btn-secondary hidden">💾 Update preset</button>
       </div>
-      <div class="preset-list-box">
-        <select id="cloudPresetDropdown">
-          <option value="">-- Load from Cloudflare --</option>
-        </select>
-        <button type="button" id="loadPresetCloudBtn" class="btn-secondary">Load</button>
+      <div class="preset-list-panel">
+        <span class="label">Cloud presets</span>
+        <div id="cloudPresetList" class="cloud-preset-list">
+          <div class="lb-loading">Loading presets…</div>
+        </div>
       </div>
+    </div>
+  </div>
+
+  <!-- v1.0.9.M – Edit common names for active preset -->
+  <div id="aliasModalBackdrop" class="modal-backdrop hidden"></div>
+  <div id="aliasModal" class="modal-card wide-card hidden" style="max-width:520px;height:auto;max-height:80vh;">
+    <div class="modal-header">
+      <h2>✏️ Common names for preset</h2>
+      <button type="button" id="closeAliasModalBtn" class="close-btn">&times;</button>
+    </div>
+    <p class="guest-notice" id="aliasModalSubtitle" style="margin:8px 0;">Override display names for this preset only.</p>
+    <div id="aliasList" class="alias-list"></div>
+    <div class="preset-footer" style="margin-top:12px;">
+      <button type="button" id="saveAliasesBtn" class="btn-primary">Save names</button>
+      <button type="button" id="cancelAliasBtn" class="btn-secondary">Cancel</button>
     </div>
   </div>
 
