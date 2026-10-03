@@ -24,8 +24,7 @@
 /** Public R2 base for diagnostic photos (used by loadPhoto) */
 const CLOUDFLARE_R2_BASE = "https://pub-7c8f1ea1e424248a09ee567dfbcdedf.r2.dev";
 /** Cloudflare Worker that stores leaderboard + presets in KV */
-/* v1.0.7.M – corrected Worker URL */
-const WORKER_API = "https://quiz-api.jonathantate-ent.workers.dev";
+const WORKER_API = "https://quiz.jonathantt.workers.dev";
 
 /**
  * Available species databases. Each entry lists JSON files to try (first
@@ -54,7 +53,7 @@ const DATABASES = {
   }
 };
 
-let currentDatabase = "vt";          // primary label for status text
+let currentDatabase = "vt";          // which DB is currently loaded
 let masterSpecies = [];              // full list after normalize
 let activeSpeciesPool = [];          // subset currently selected for quizzes
 let selectedIds = new Set();         // ids checked in the picker
@@ -62,23 +61,16 @@ let filteredSpecies = [];            // current search results
 let fuseInstance = null;             // Fuse.js instance for fuzzy search
 let budScanMap = {};                 // id → Spinzam embed URL
 
-/* v1.0.9.M – database priority (top first). enabled flags + order persisted */
-let dbPriority = [
-  { key: "vt", enabled: true },
-  { key: "osu", enabled: false },
-  { key: "arborday", enabled: false },
-  { key: "inat", enabled: false }
-];
-
-/* v1.0.9.M – active cloud preset being edited + per-preset common-name overrides */
-let activePresetId = null;
-let activePresetMeta = null;         // { id, title, author, species, aliases }
-let presetAliases = {};              // id → common name override for active preset
-let cloudPresetsCache = [];          // last fetched preset list
-
-/** Tiny offline fallback if no JSON files load */
-const FALLBACK_SCI = [
-  "acer rubrum","acer saccharum","quercus alba","pinus strobus","fagus grandifolia"
+/**
+ * Lab test lists hardcoded by scientific name. Checking a toggle in Settings
+ * filters selectedIds down to matching species (or restores all if none checked).
+ */
+const HARDCODED_PRESETS = [
+  { id: 'quizTest1Toggle', sci: ["asimina triloba","ilex opaca","robinia pseudoacacia","juglans nigra","sassafras albidum","lindera benzoin","liriodendron tulipifera","fraxinus americana","paulownia tomentosa","pinus strobus","tsuga canadensis","platanus occidentalis","acer saccharum","acer negundo","aesculus flava","parthenocissus quinquefolia","toxicodendron radicans","carpinus caroliniana","elaeagnus umbellate","reynoutria japonica"] },
+  { id: 'quizTest2Toggle', sci: ["cercis canadensis","quercus alba","quercus montana","quercus coccinea","quercus marilandica","prunus serotina","pyrus calleryana","acer platanoides","ailanthus altissima","tilia americana"] },
+  { id: 'quizTest3Toggle', sci: ["quercus rubra","magnolia acuminata","acer pensylvanicum","cornus florida","acer rubrum","quercus velutina","smilax spp.","carya cordiformis","berbis spp."] },
+  { id: 'quizTest4Toggle', sci: ["nyssa sylvatica","fagus grandifolia","pinus rigida","pinus virginiana","oxydendrum arboreum","quercus falcata","juniperus virginiana","albizia julibrissin","quercus stellata","diospyros virginiana"] },
+  { id: 'quizTest5Toggle', sci: ["malus pumila","pinus taeda","quercus phellos","hedera helix","catalpa speciosa","cornus kousa","carya glabra var.glabra","fraxinus pennsylvanica","rubus phoenicolasius","ulmus rubra","rosa multiflora","cupressocyparis leylandii","acer saccharinum"] }
 ];
 
 /* --- Quiz configuration (mutated by Settings sidebar) --- */
@@ -117,119 +109,62 @@ document.addEventListener('DOMContentLoaded', initApplication);
 
 async function initApplication() {
   cacheDOM();
-  loadDbPriorityFromStorage();
   initSidebar();
   initQuizControls();
   initSpeciesModal();
   initImageResizer();
-  initDbPriorityUI();
-  initAliasModal();
+  initDatabaseSelector();
   
   // Non-blocking leaderboard fetch (failure is fine – user can still play)
   fetchGlobalLeaderboard().catch(() => {});
 
-  // Load databases in priority order (merged)
-  await reloadFromPriority();
+  // Load default database (VT Dendrology)
+  await loadDatabase("vt");
   fetchCloudPresets().catch(() => {});
 }
 
 /* --------------------------------------------------------------------------
-   3. DATABASE LOADER + PRIORITY LIST (v1.0.9.M)
-   Merges enabled sources in priority order (first wins on same scientific name).
+   3. DATABASE LOADER
+   Tries listed JSON files for the chosen source, normalizes records,
+   builds Fuse index, and refreshes the picker UI.
    -------------------------------------------------------------------------- */
+async function loadDatabase(dbKey) {
+  const db = DATABASES[dbKey] || DATABASES.vt;
+  currentDatabase = dbKey;
 
-function loadDbPriorityFromStorage() {
-  try {
-    const raw = localStorage.getItem("dendro_db_priority");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length) dbPriority = parsed;
+  const note = document.getElementById("dbStatusNote");
+  if (note) note.textContent = `Loading ${db.label}…`;
+
+  /* v1.0.5.M – handle live iNaturalist source (no local JSON) */
+  if (db.type === "api" && dbKey === "inat") {
+    if (note) note.textContent = "iNaturalist: using live taxa + photos…";
+    // Keep current pool if we already have species; otherwise use tiny starter set
+    if (!masterSpecies.length) {
+      masterSpecies = [{
+        id: "1",
+        common: "Red Maple",
+        scientific: "Acer rubrum",
+        family: "Sapindaceae",
+        spinzam_url: null
+      }];
     }
-  } catch (e) {}
-}
-
-function saveDbPriorityToStorage() {
-  try {
-    localStorage.setItem("dendro_db_priority", JSON.stringify(dbPriority));
-  } catch (e) {}
-}
-
-function initDbPriorityUI() {
-  renderDbPriorityList();
-}
-
-function renderDbPriorityList() {
-  const list = document.getElementById("dbPriorityList");
-  if (!list) return;
-  list.innerHTML = "";
-  dbPriority.forEach((entry, idx) => {
-    const db = DATABASES[entry.key];
-    if (!db) return;
-    const row = document.createElement("div");
-    row.className = "db-priority-row";
-    row.innerHTML = `
-      <span class="db-rank">${idx + 1}</span>
-      <input type="checkbox" data-key="${entry.key}" ${entry.enabled ? "checked" : ""} title="Include this source">
-      <span class="db-label">${db.label}</span>
-      <button type="button" class="db-move" data-dir="up" data-idx="${idx}" ${idx === 0 ? "disabled" : ""}>▲</button>
-      <button type="button" class="db-move" data-dir="down" data-idx="${idx}" ${idx === dbPriority.length - 1 ? "disabled" : ""}>▼</button>
-    `;
-    row.querySelector('input[type="checkbox"]').addEventListener("change", async (e) => {
-      entry.enabled = e.target.checked;
-      saveDbPriorityToStorage();
-      await reloadFromPriority();
+    selectedIds = new Set(masterSpecies.map(sp => sp.id));
+    filteredSpecies = [...masterSpecies];
+    activeSpeciesPool = [...masterSpecies];
+    initFuzzySearch();
+    renderSpeciesGrid();
+    renderFamilySidebar();
+    updatePoolStatus();
+    if (note) note.textContent = `iNaturalist (live): ${masterSpecies.length} species ready`;
+    document.querySelectorAll("#databaseSelect .mode-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.db === dbKey);
     });
-    row.querySelectorAll(".db-move").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const i = parseInt(btn.dataset.idx, 10);
-        const dir = btn.dataset.dir;
-        const j = dir === "up" ? i - 1 : i + 1;
-        if (j < 0 || j >= dbPriority.length) return;
-        const tmp = dbPriority[i];
-        dbPriority[i] = dbPriority[j];
-        dbPriority[j] = tmp;
-        saveDbPriorityToStorage();
-        renderDbPriorityList();
-        await reloadFromPriority();
-      });
-    });
-    list.appendChild(row);
-  });
-}
-
-function normalizeRecord(item, idx, sourceKey, localBudMap) {
-  const scientific = (item.scientific || "").trim();
-  const common = (item.common || "").trim();
-  if (!scientific && !common) return null;
-  if (sourceKey === "arborday" && !scientific) return null;
-
-  const id = item.id !== undefined ? String(item.id)
-           : item.vtId !== undefined ? String(item.vtId)
-           : item.arborday_id !== undefined ? String(item.arborday_id)
-           : `${sourceKey}-${idx + 1}`;
-
-  let spinzam = item.spinzam_url || null;
-  if (!spinzam && localBudMap[id]) spinzam = localBudMap[id];
-  if (!spinzam && item.vtId && localBudMap[String(item.vtId)]) {
-    spinzam = localBudMap[String(item.vtId)];
+    return;
   }
 
-  return {
-    id,
-    common: common || scientific || "Unknown",
-    scientific: scientific || common || "Unknown Species",
-    family: item.family || item.family_modern || (item.familyNum ? `Family #${item.familyNum}` : "Unknown"),
-    spinzam_url: spinzam,
-    source: sourceKey
-  };
-}
-
-async function fetchRawForDb(dbKey) {
-  const db = DATABASES[dbKey];
-  if (!db) return { rows: [], bud: {} };
-  if (db.type === "api") return { rows: [], bud: {} }; // iNaturalist = photos only for now
-
   let rawData = null;
+
+  // Try each candidate file until one succeeds
   for (const path of (db.files || [])) {
     try {
       const res = await fetch(path);
@@ -242,65 +177,68 @@ async function fetchRawForDb(dbKey) {
     }
   }
 
-  let bud = {};
+  // Optional bud-scan map (Spinzam embeds, VT only)
+  budScanMap = {};
   if (db.budScan) {
     try {
       const res = await fetch(db.budScan);
-      if (res.ok) bud = await res.json();
-    } catch (e) {}
-  }
-  return { rows: Array.isArray(rawData) ? rawData : [], bud };
-}
-
-async function reloadFromPriority() {
-  const note = document.getElementById("dbStatusNote");
-  if (note) note.textContent = "Loading databases by priority…";
-
-  const merged = new Map(); // scientific lower → record (first wins)
-  const idSeen = new Set();
-  budScanMap = {};
-  const enabledKeys = dbPriority.filter(e => e.enabled).map(e => e.key);
-  if (!enabledKeys.length) {
-    enabledKeys.push("vt");
+      if (res.ok) budScanMap = await res.json();
+    } catch (e) {
+      console.warn("Bud scan map not loaded", e);
+    }
   }
 
-  for (const key of enabledKeys) {
-    const { rows, bud } = await fetchRawForDb(key);
-    Object.assign(budScanMap, bud);
-    rows.forEach((item, idx) => {
-      const rec = normalizeRecord(item, idx, key, bud);
-      if (!rec) return;
-      const sciKey = rec.scientific.toLowerCase();
-      if (merged.has(sciKey)) return; // higher priority already claimed
-      // ensure unique id across sources
-      let id = rec.id;
-      if (idSeen.has(id)) id = `${key}-${id}`;
-      idSeen.add(id);
-      rec.id = id;
-      merged.set(sciKey, rec);
+  // Fallback to hardcoded lab list if nothing loaded
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+    console.warn("Activating built-in preset fallback dataset.");
+    const fallbackMap = new Map();
+    HARDCODED_PRESETS.forEach(p => {
+      p.sci.forEach(s => {
+        const common = s.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        fallbackMap.set(s, {
+          id: String(fallbackMap.size + 1),
+          common,
+          scientific: s,
+          family: "Pinaceae"
+        });
+      });
     });
+    rawData = Array.from(fallbackMap.values());
   }
 
-  masterSpecies = Array.from(merged.values());
+  // Normalize every record into a common shape
+  masterSpecies = rawData
+    .map((item, idx) => {
+      const scientific = (item.scientific || "").trim();
+      const common = (item.common || "").trim();
+      // Skip Arbor Day entries that have no usable name
+      if (!scientific && !common) return null;
+      if (dbKey === "arborday" && !scientific) return null; // keep only real species
 
-  if (!masterSpecies.length) {
-    masterSpecies = FALLBACK_SCI.map((s, i) => ({
-      id: String(i + 1),
-      common: s.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
-      scientific: s,
-      family: "Unknown",
-      spinzam_url: null,
-      source: "fallback"
-    }));
-  }
+      const id = item.id !== undefined ? String(item.id)
+               : item.vtId !== undefined ? String(item.vtId)
+               : item.arborday_id !== undefined ? String(item.arborday_id)
+               : String(idx + 1);
 
-  // Apply active preset aliases to display names
-  applyAliasesToMaster();
+      let spinzam = item.spinzam_url || null;
+      if (!spinzam && budScanMap[id]) spinzam = budScanMap[id];
+      if (!spinzam && item.vtId && budScanMap[String(item.vtId)]) {
+        spinzam = budScanMap[String(item.vtId)];
+      }
+
+      return {
+        id,
+        common: common || scientific || "Unknown",
+        scientific: scientific || common || "Unknown Species",
+        family: item.family || item.family_modern || (item.familyNum ? `Family #${item.familyNum}` : "Unknown"),
+        spinzam_url: spinzam
+      };
+    })
+    .filter(Boolean);
 
   selectedIds = new Set(masterSpecies.map(sp => sp.id));
   filteredSpecies = [...masterSpecies];
   activeSpeciesPool = [...masterSpecies];
-  currentDatabase = enabledKeys[0] || "vt";
 
   initFuzzySearch();
   renderSpeciesGrid();
@@ -308,21 +246,26 @@ async function reloadFromPriority() {
   updatePoolStatus();
 
   if (note) {
-    const labels = enabledKeys.map(k => DATABASES[k]?.label || k).join(" → ");
-    note.textContent = `${masterSpecies.length} species (${labels})`;
+    note.textContent = `${db.label}: ${masterSpecies.length} species ready`;
   }
-}
 
-function applyAliasesToMaster() {
-  if (!presetAliases || !Object.keys(presetAliases).length) return;
-  masterSpecies.forEach(sp => {
-    if (presetAliases[sp.id]) sp.common = presetAliases[sp.id];
+  // Update active button styling
+  document.querySelectorAll("#databaseSelect .mode-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.db === dbKey);
   });
 }
 
-function displayCommon(sp) {
-  if (presetAliases && presetAliases[sp.id]) return presetAliases[sp.id];
-  return sp.common;
+function initDatabaseSelector() {
+  document.querySelectorAll("#databaseSelect .mode-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const key = btn.dataset.db;
+      if (key === currentDatabase) return;
+      // Visual feedback
+      document.querySelectorAll("#databaseSelect .mode-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      await loadDatabase(key);
+    });
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -445,9 +388,8 @@ function initSpeciesModal() {
     updatePickerUI();
   });
 
-  document.getElementById('savePresetCloudBtn')?.addEventListener('click', () => savePresetToCloudflare(false));
-  document.getElementById('updatePresetCloudBtn')?.addEventListener('click', () => savePresetToCloudflare(true));
-  document.getElementById('addSpeciesBtn')?.addEventListener('click', addCustomSpecies);
+  document.getElementById('savePresetCloudBtn')?.addEventListener('click', savePresetToCloudflare);
+  document.getElementById('loadPresetCloudBtn')?.addEventListener('click', loadPresetFromCloudflare);
 }
 
 function renderSpeciesGrid() {
@@ -469,7 +411,7 @@ function renderSpeciesGrid() {
     label.innerHTML = `
       <input type="checkbox" data-id="${sp.id}" ${checked ? 'checked' : ''}>
       <div class="name-block">
-        <span class="common-txt">${displayCommon(sp)}</span>
+        <span class="common-txt">${sp.common}</span>
         <span class="sci-txt"><em>${sp.scientific}</em> (${sp.family})</span>
       </div>
     `;
@@ -561,8 +503,7 @@ function updatePoolStatus() {
    Save current selection to Worker KV and load any saved preset back into
    the picker. Requires WORKER_API to be reachable.
    -------------------------------------------------------------------------- */
-/* v1.0.9.M – presets with ⋮ menu, update, aliases, add-species */
-async function savePresetToCloudflare(isUpdate) {
+async function savePresetToCloudflare() {
   if (selectedIds.size === 0) {
     alert("Select at least 1 species to create a preset.");
     return;
@@ -570,18 +511,14 @@ async function savePresetToCloudflare(isUpdate) {
 
   const titleInput = document.getElementById('presetTitleInput');
   const authorInput = document.getElementById('presetAuthorInput');
-  let title = (titleInput?.value || '').trim();
+  const title = (titleInput?.value || '').trim() || `Preset (${selectedIds.size} species)`;
   const author = (authorInput?.value || '').trim() || 'Anonymous';
-  if (!title && isUpdate && activePresetMeta) title = activePresetMeta.title;
-  if (!title) title = `Preset (${selectedIds.size} species)`;
 
   const payload = {
     title,
     author,
-    species: Array.from(selectedIds),
-    aliases: { ...presetAliases }
+    species: Array.from(selectedIds)
   };
-  if (isUpdate && activePresetId) payload.id = activePresetId;
 
   try {
     const res = await fetch(`${WORKER_API}/api/presets`, {
@@ -591,221 +528,54 @@ async function savePresetToCloudflare(isUpdate) {
     });
     const data = await res.json();
     if (data.success) {
-      alert(isUpdate ? `✓ Preset "${title}" updated.` : `✓ Preset "${title}" saved.`);
-      if (data.preset?.id) {
-        activePresetId = data.preset.id;
-        activePresetMeta = data.preset;
-      }
-      // Keep local alias map keyed by preset id
-      try {
-        const all = JSON.parse(localStorage.getItem("dendro_preset_aliases") || "{}");
-        all[activePresetId || title] = { ...presetAliases };
-        localStorage.setItem("dendro_preset_aliases", JSON.stringify(all));
-      } catch (e) {}
+      alert(`✓ Preset "${title}" saved to Cloudflare!`);
+      if (titleInput) titleInput.value = '';
       fetchCloudPresets();
-      updateUpdateBtnVisibility();
-    } else {
-      alert("Save failed. Try again.");
     }
   } catch (err) {
     console.error("Cloudflare preset save error:", err);
-    alert("Failed to save to Cloudflare Worker.");
+    alert("Failed to save to Cloudflare Worker. Check endpoint URL.");
   }
 }
 
 async function fetchCloudPresets() {
-  const list = document.getElementById("cloudPresetList");
-  if (!list) return;
+  const dropdown = document.getElementById('cloudPresetDropdown');
+  if (!dropdown) return;
 
   try {
     const res = await fetch(`${WORKER_API}/api/presets`);
-    if (!res.ok) throw new Error("bad status");
+    if (!res.ok) return;
     const presets = await res.json();
-    cloudPresetsCache = Array.isArray(presets) ? presets : [];
-    renderCloudPresetList();
+
+    dropdown.innerHTML = '<option value="">-- Load from Cloudflare --</option>';
+    presets.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.title} (${p.species.length} spp) — ${p.author}`;
+      opt.dataset.species = JSON.stringify(p.species);
+      dropdown.appendChild(opt);
+    });
   } catch (err) {
     console.warn("Could not retrieve Cloudflare presets:", err);
-    list.innerHTML = '<div class="lb-loading">Cloud presets offline</div>';
   }
 }
 
-function renderCloudPresetList() {
-  const list = document.getElementById("cloudPresetList");
-  if (!list) return;
-  if (!cloudPresetsCache.length) {
-    list.innerHTML = '<div class="lb-loading">No presets yet — select species and Save as new</div>';
+function loadPresetFromCloudflare() {
+  const dropdown = document.getElementById('cloudPresetDropdown');
+  const selOpt = dropdown?.options[dropdown.selectedIndex];
+  if (!selOpt || !selOpt.dataset.species) {
+    alert("Choose a preset from the dropdown first.");
     return;
   }
-  list.innerHTML = "";
-  cloudPresetsCache.forEach(p => {
-    const row = document.createElement("div");
-    row.className = "preset-row" + (p.id === activePresetId ? " active-preset" : "");
-    row.innerHTML = `
-      <div class="preset-row-info">
-        <div class="preset-row-title">${p.title || "Untitled"}</div>
-        <div class="preset-row-meta">${(p.species || []).length} spp · ${p.author || "Anon"}</div>
-      </div>
-      <button type="button" class="preset-menu-btn" title="Options">⋮</button>
-      <div class="preset-menu">
-        <button type="button" data-act="load">Load</button>
-        <button type="button" data-act="edit">Edit preset</button>
-        <button type="button" data-act="alias">Edit common names</button>
-      </div>
-    `;
-    const menuBtn = row.querySelector(".preset-menu-btn");
-    const menu = row.querySelector(".preset-menu");
-    menuBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      document.querySelectorAll(".preset-menu.open").forEach(m => {
-        if (m !== menu) m.classList.remove("open");
-      });
-      menu.classList.toggle("open");
-    });
-    menu.querySelectorAll("button").forEach(b => {
-      b.addEventListener("click", (e) => {
-        e.stopPropagation();
-        menu.classList.remove("open");
-        const act = b.dataset.act;
-        if (act === "load") applyCloudPreset(p, false);
-        if (act === "edit") applyCloudPreset(p, true);
-        if (act === "alias") openAliasEditor(p);
-      });
-    });
-    list.appendChild(row);
-  });
-}
 
-function applyCloudPreset(p, forEdit) {
-  activePresetId = p.id;
-  activePresetMeta = p;
-  selectedIds = new Set((p.species || []).map(String));
-  // Load aliases from preset payload or localStorage
-  presetAliases = {};
-  if (p.aliases && typeof p.aliases === "object") {
-    presetAliases = { ...p.aliases };
-  } else {
-    try {
-      const all = JSON.parse(localStorage.getItem("dendro_preset_aliases") || "{}");
-      if (all[p.id]) presetAliases = { ...all[p.id] };
-    } catch (e) {}
-  }
-  applyAliasesToMaster();
-  updatePickerUI();
-  syncActivePool();
-  const titleInput = document.getElementById("presetTitleInput");
-  const authorInput = document.getElementById("presetAuthorInput");
-  if (titleInput) titleInput.value = p.title || "";
-  if (authorInput) authorInput.value = p.author || "";
-  updateUpdateBtnVisibility();
-  renderCloudPresetList();
-  if (forEdit) {
-    alert(`Editing "${p.title}". Change selection, then click Update preset.`);
-  } else {
-    alert(`Loaded "${p.title}" (${selectedIds.size} species).`);
-  }
-}
-
-function updateUpdateBtnVisibility() {
-  const btn = document.getElementById("updatePresetCloudBtn");
-  if (!btn) return;
-  if (activePresetId) btn.classList.remove("hidden");
-  else btn.classList.add("hidden");
-}
-
-function addCustomSpecies() {
-  const common = (document.getElementById("addCommonInput")?.value || "").trim();
-  const scientific = (document.getElementById("addSciInput")?.value || "").trim();
-  const family = (document.getElementById("addFamilyInput")?.value || "").trim() || "Unknown";
-  if (!common && !scientific) {
-    alert("Enter at least a common or scientific name.");
-    return;
-  }
-  const id = "custom-" + Date.now();
-  const rec = {
-    id,
-    common: common || scientific,
-    scientific: scientific || common,
-    family,
-    spinzam_url: null,
-    source: "custom"
-  };
-  // Avoid duplicate scientific
-  const exists = masterSpecies.find(s => s.scientific.toLowerCase() === rec.scientific.toLowerCase());
-  if (exists) {
-    selectedIds.add(exists.id);
-    updatePickerUI();
-    syncActivePool();
-    alert(`Already in list — selected "${displayCommon(exists)}".`);
-    return;
-  }
-  masterSpecies.push(rec);
-  selectedIds.add(id);
-  filteredSpecies = [...masterSpecies];
-  initFuzzySearch();
-  updatePickerUI();
-  syncActivePool();
-  renderFamilySidebar();
-  document.getElementById("addCommonInput").value = "";
-  document.getElementById("addSciInput").value = "";
-  document.getElementById("addFamilyInput").value = "";
-  alert(`Added "${rec.common}". Save/Update the preset to keep it.`);
-}
-
-function initAliasModal() {
-  document.getElementById("closeAliasModalBtn")?.addEventListener("click", closeAliasModal);
-  document.getElementById("cancelAliasBtn")?.addEventListener("click", closeAliasModal);
-  document.getElementById("aliasModalBackdrop")?.addEventListener("click", closeAliasModal);
-  document.getElementById("saveAliasesBtn")?.addEventListener("click", saveAliasEdits);
-  document.addEventListener("click", () => {
-    document.querySelectorAll(".preset-menu.open").forEach(m => m.classList.remove("open"));
-  });
-}
-
-function openAliasEditor(p) {
-  applyCloudPreset(p, true);
-  const modal = document.getElementById("aliasModal");
-  const backdrop = document.getElementById("aliasModalBackdrop");
-  const list = document.getElementById("aliasList");
-  const sub = document.getElementById("aliasModalSubtitle");
-  if (sub) sub.textContent = `Overrides for "${p.title}" only.`;
-  list.innerHTML = "";
-  const ids = (p.species || []).map(String);
-  ids.forEach(id => {
-    const sp = masterSpecies.find(s => s.id === id);
-    const row = document.createElement("div");
-    row.className = "alias-row";
-    const current = presetAliases[id] || (sp ? sp.common : "");
-    row.innerHTML = `
-      <span class="sci">${sp ? sp.scientific : id}</span>
-      <input type="text" data-id="${id}" value="${(current || "").replace(/"/g, "&quot;")}" placeholder="Common name">
-    `;
-    list.appendChild(row);
-  });
-  modal?.classList.remove("hidden");
-  backdrop?.classList.remove("hidden");
-}
-
-function closeAliasModal() {
-  document.getElementById("aliasModal")?.classList.add("hidden");
-  document.getElementById("aliasModalBackdrop")?.classList.add("hidden");
-}
-
-function saveAliasEdits() {
-  const list = document.getElementById("aliasList");
-  list?.querySelectorAll("input[data-id]").forEach(inp => {
-    const v = inp.value.trim();
-    if (v) presetAliases[inp.dataset.id] = v;
-    else delete presetAliases[inp.dataset.id];
-  });
-  applyAliasesToMaster();
-  updatePickerUI();
   try {
-    const all = JSON.parse(localStorage.getItem("dendro_preset_aliases") || "{}");
-    if (activePresetId) all[activePresetId] = { ...presetAliases };
-    localStorage.setItem("dendro_preset_aliases", JSON.stringify(all));
-  } catch (e) {}
-  closeAliasModal();
-  alert("Common names updated for this preset. Click Update preset to sync to Cloudflare.");
+    const ids = JSON.parse(selOpt.dataset.species);
+    selectedIds = new Set(ids.map(String));
+    updatePickerUI();
+    alert(`Loaded "${selOpt.textContent}"`);
+  } catch (e) {
+    console.error("Failed to parse preset payload:", e);
+  }
 }
 
 /* ============================================================================
@@ -880,7 +650,27 @@ function initQuizControls() {
     if (label) label.textContent = TIME_LIMIT + 's';
   });
 
-  /* v1.0.9.M – hardcoded Quiz Test #1–5 removed from UI */
+  HARDCODED_PRESETS.forEach(p => {
+    document.getElementById(p.id)?.addEventListener('change', () => {
+      const want = new Set();
+      HARDCODED_PRESETS.forEach(pr => {
+        if (document.getElementById(pr.id)?.checked) {
+          pr.sci.forEach(s => want.add(s.toLowerCase().trim()));
+        }
+      });
+
+      if (want.size > 0) {
+        selectedIds.clear();
+        masterSpecies.forEach(sp => {
+          if (want.has(sp.scientific.toLowerCase().trim())) selectedIds.add(sp.id);
+        });
+      } else {
+        masterSpecies.forEach(sp => selectedIds.add(sp.id));
+      }
+      syncActivePool();
+      updateBadge();
+    });
+  });
 
   document.getElementById('startBtn')?.addEventListener('click', () => {
     const input = document.getElementById('playerName');
@@ -962,24 +752,7 @@ function launchGame() {
     return;
   }
 
-  /* v1.0.10.M – allow repeats when question count > pool size */
-  const pool = [...activeSpeciesPool];
-  const want = Math.max(1, TOTAL);
-  questions = [];
-  while (questions.length < want) {
-    const batch = shuffle(pool);
-    for (const sp of batch) {
-      if (questions.length >= want) break;
-      // avoid back-to-back same species when pool has 2+
-      if (pool.length > 1 && questions.length && questions[questions.length - 1].id === sp.id) continue;
-      questions.push(sp);
-    }
-    // safety: single-species pool
-    if (pool.length === 1) {
-      while (questions.length < want) questions.push(pool[0]);
-      break;
-    }
-  }
+  questions = shuffle(activeSpeciesPool).slice(0, Math.min(TOTAL, activeSpeciesPool.length));
   TOTAL = questions.length;
   qIndex = 0;
   score = 0;
@@ -1008,16 +781,16 @@ function showQuestion() {
 
   if (currentMode === 'common-to-sci') {
     promptLabel.textContent = 'Scientific Name';
-    promptEl.textContent = displayCommon(sp);
+    promptEl.textContent = sp.common;
     currentCorrect = sp.scientific;
   } else if (currentMode === 'family') {
     promptLabel.textContent = 'Botanical Family';
-    promptEl.textContent = `${displayCommon(sp)} (${sp.scientific})`;
+    promptEl.textContent = `${sp.common} (${sp.scientific})`;
     currentCorrect = sp.family;
   } else {
     promptLabel.textContent = 'Common Name';
     promptEl.textContent = sp.scientific;
-    currentCorrect = displayCommon(sp);
+    currentCorrect = sp.common;
   }
 
   document.getElementById('qNum').textContent = qIndex + 1;
@@ -1055,7 +828,7 @@ function showQuestion() {
 
     let choices = [currentCorrect];
     const distractorPool = masterSpecies
-      .map(item => currentMode === 'common-to-sci' ? item.scientific : (currentMode === 'family' ? item.family : displayCommon(item)))
+      .map(item => currentMode === 'common-to-sci' ? item.scientific : (currentMode === 'family' ? item.family : item.common))
       .filter((v, i, self) => v !== currentCorrect && self.indexOf(v) === i);
 
     shuffle(distractorPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
