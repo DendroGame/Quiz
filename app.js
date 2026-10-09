@@ -833,7 +833,7 @@ function csvNorm(s) {
 }
 function csvNameMatch(sp, name, sci) {
   const n = csvNorm(name);
-  const commons = [sp.common, displayCommon(sp)].map(csvNorm);
+  const commons = [sp.common, displayCommon(sp), ...(sp.aliases || [])].map(csvNorm);
   if (commons.includes(n)) return true;
   const s = csvNorm(sci);
   const spSci = csvNorm(sp.scientific);
@@ -1430,6 +1430,20 @@ async function loadPhoto(sp) {
   if (imgPlaceholder) imgPlaceholder.style.opacity = '0.4';
   if (imgLoading) imgLoading.classList.remove('hidden');
   setPhotoCredit("");
+
+  /* v1.0.18.M – course species added from iNaturalist keep that photo and credit */
+  if (sp.inat_photo && speciesImg) {
+    speciesImg.src = sp.inat_photo;
+    speciesImg.onload = () => {
+      if (imgLoading) imgLoading.classList.add('hidden');
+      const who = sp.inat_attribution || "iNaturalist contributor";
+      const license = sp.inat_license ? ` (${sp.inat_license})` : "";
+      const href = sp.inat_taxon_id ? `https://www.inaturalist.org/taxa/${sp.inat_taxon_id}` : "https://www.inaturalist.org";
+      setPhotoCredit(`Photo: ${who}${license} · iNaturalist`, href);
+      if (hintUsedThisQ) revealImage();
+    };
+    return;
+  }
 
   const commonSlug = sp.common.toLowerCase().replace(/[^a-z0-9]/g, '_');
   const sciClean = sp.scientific.replace(/spp\.?/i, '').trim();
