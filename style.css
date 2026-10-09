@@ -748,12 +748,16 @@ body {
 
 .fam-sidebar-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 4px 6px;
   border-radius: 4px;
   font-size: 0.78rem;
   cursor: pointer;
+}
+
+.fam-sidebar-item input {
+  accent-color: var(--accent);
 }
 
 .fam-sidebar-item:hover {
