@@ -804,21 +804,16 @@ function importPresetFromCsv(e) {
   const reader = new FileReader();
   reader.onload = () => {
     const text = String(reader.result || "");
-    const names = [];
-    text.split(/\r?\n/).forEach((line, i) => {
-      if (!line.trim()) return;
-      const cell = line.split(",")[0].replace(/^"|"$/g, "").trim();
-      if (!cell) return;
-      if (i === 0 && /^(common|common name|name)$/i.test(cell)) return;
-      names.push(cell);
-    });
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
     const found = [];
     const missing = [];
-    names.forEach(name => {
-      const hit = masterSpecies.find(sp =>
-        sp.common.toLowerCase() === name.toLowerCase() ||
-        displayCommon(sp).toLowerCase() === name.toLowerCase()
-      );
+    lines.forEach((line, i) => {
+      const cells = line.split(",").map(c => c.replace(/^"|"$/g, "").trim());
+      const name = cells[0] || "";
+      const sci = cells[1] || "";
+      if (!name) return;
+      if (i === 0 && /^(common|common name|name)$/i.test(name)) return;
+      const hit = masterSpecies.find(sp => csvNameMatch(sp, name, sci));
       if (hit) found.push(hit.id);
       else missing.push(name);
     });
@@ -827,9 +822,23 @@ function importPresetFromCsv(e) {
     syncActivePool();
     const titleInput = document.getElementById("presetTitleInput");
     if (titleInput && !titleInput.value) titleInput.value = file.name.replace(/\.csv$/i, "");
-    alert(`CSV loaded: ${found.length} matched${missing.length ? `, ${missing.length} not found (${missing.slice(0, 6).join(", ")})` : ""}. Save as new to keep the preset.`);
+    alert(`CSV loaded: ${found.length} matched${missing.length ? `, ${missing.length} not found (${missing.slice(0, 8).join(", ")})` : ""}. Save as new to keep the preset.`);
   };
   reader.readAsText(file);
+}
+
+/* v1.0.17.M – match paper names, database names, and scientific names */
+function csvNorm(s) {
+  return (s || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/[-–]/g, " ").replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+}
+function csvNameMatch(sp, name, sci) {
+  const n = csvNorm(name);
+  const commons = [sp.common, displayCommon(sp)].map(csvNorm);
+  if (commons.includes(n)) return true;
+  const s = csvNorm(sci);
+  const spSci = csvNorm(sp.scientific);
+  if (s && spSci && (spSci === s || spSci.startsWith(s) || s.startsWith(spSci))) return true;
+  return false;
 }
 
 function updateUpdateBtnVisibility() {
