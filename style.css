@@ -1115,3 +1115,16 @@ body {
   font-size: 0.9rem;
   outline: none;
 }
+
+/* v1.0.14.M – photo credit under the specimen */
+.img-credit {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.img-credit a {
+  color: #a8e0c4;
+  text-decoration: underline;
+}
