@@ -462,7 +462,8 @@ function initSpeciesModal() {
   const clearBtn = document.getElementById('clearSearchBtn');
 
   const openModal = () => {
-    closeSidebar();
+    document.getElementById("settingsSidebar")?.classList.remove("open");
+    document.getElementById("sidebarBackdrop")?.classList.add("hidden");
     modal?.classList.remove('hidden');
     backdrop?.classList.remove('hidden');
     renderSpeciesGrid();
