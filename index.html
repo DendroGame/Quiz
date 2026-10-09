@@ -117,9 +117,14 @@
         <button type="button" id="downloadLbBtn" class="btn-secondary">Download scores</button>
       </div>
       <div class="set-row">
-        <span class="label">Needs-work</span>
-        <p id="needsWorkNote" class="guest-notice">Missed species are saved on this device.</p>
-        <button type="button" id="clearNeedsBtn" class="btn-secondary">Clear needs-work</button>
+        <span class="label">Families you know well</span>
+        <button type="button" id="knowsWellBtn" class="btn-secondary">Show pie</button>
+        <div id="knowsWellPie" class="pie-box hidden"></div>
+      </div>
+      <div class="set-row">
+        <span class="label">Needs-work by family</span>
+        <button type="button" id="needsPieBtn" class="btn-secondary">Show pie</button>
+        <div id="needsPie" class="pie-box hidden"></div>
       </div>
 
       <!-- Input Style: Multiple Choice vs Typing Mode (multi-select) -->
