@@ -16,6 +16,7 @@
   <meta name="description" content="Virginia Tech Dendrology Master Species, Preset Creator & 3D Bud Viewer">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233d8b6e'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-size='36' font-family='Georgia,serif' fill='%23e2f0d9'%3ED%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Lobster&display=swap" rel="stylesheet">
   <title>Dendrology Master Quiz</title>
   <!-- Fuse.js for forgiving fuzzy search -->
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
@@ -61,7 +62,64 @@
           <button type="button" class="mode-btn active" data-mode="sci-to-common">Sci → Common</button>
           <button type="button" class="mode-btn" data-mode="common-to-sci">Common → Sci</button>
           <button type="button" class="mode-btn" data-mode="family">Family Names</button>
+          <button type="button" class="mode-btn" data-mode="flash">Flash cards</button>
+          <button type="button" class="mode-btn" data-mode="identify">Identification</button>
+          <button type="button" class="mode-btn" data-mode="invasive">Invasive or not?</button>
         </div>
+      </div>
+
+      <!-- v1.0.21.M – settings from the older quiz that this app did not already have -->
+      <div class="set-row">
+        <span class="label">Identification answers</span>
+        <label class="chk-label"><input type="checkbox" id="idCommonToggle" checked /> Common name</label>
+        <label class="chk-label"><input type="checkbox" id="idSciToggle" /> Scientific name</label>
+      </div>
+      <div class="set-row">
+        <label class="chk-label"><input type="checkbox" id="lookalikeToggle" /> Show common look-alikes</label>
+        <label class="chk-label"><input type="checkbox" id="infiniteFlashToggle" /> Infinite flash cards</label>
+        <label class="chk-label"><input type="checkbox" id="noTimerToggle" /> No timer (practice only)</label>
+        <label class="chk-label"><input type="checkbox" id="suggestToggle" checked /> Suggest matches while typing</label>
+        <label class="chk-label"><input type="checkbox" id="noPicsToggle" /> No pictures</label>
+        <label class="chk-label"><input type="checkbox" id="readAloudToggle" /> Read question aloud</label>
+        <label class="chk-label"><input type="checkbox" id="pronToggle" /> Show pronunciations</label>
+        <label class="chk-label"><input type="checkbox" id="familyOnQToggle" /> Show family names on questions</label>
+        <label class="chk-label"><input type="checkbox" id="showMatchesToggle" /> Show matches on all options after answer</label>
+        <label class="chk-label"><input type="checkbox" id="selectedOnlyToggle" checked /> Only use chosen species for answer options</label>
+        <label class="chk-label"><input type="checkbox" id="familyOnOptToggle" /> Show family names on answer options</label>
+        <label class="chk-label"><input type="checkbox" id="lobsterToggle" /> Lobster font</label>
+        <label class="chk-label"><input type="checkbox" id="needsWorkToggle" /> Only needs-work in current selection</label>
+      </div>
+      <div class="set-row">
+        <div class="split-label"><span class="label">Answer button size</span><span id="btnSizeLabel" class="val-highlight">Medium</span></div>
+        <input type="range" id="btnSizeSlider" min="0" max="2" value="1" step="1" class="slider" />
+      </div>
+      <div class="set-row">
+        <div class="split-label"><span class="label">Picture appears at</span><span id="picAtLabel" class="val-highlight">After answer</span></div>
+        <input type="range" id="picAtSlider" min="0" max="60" value="0" step="5" class="slider" />
+      </div>
+      <div class="set-row">
+        <span class="label">Voice detail</span>
+        <div class="mode-select" id="voiceSelect">
+          <button type="button" class="mode-btn active" data-voice="question">Question + name</button>
+          <button type="button" class="mode-btn" data-voice="name">Name only</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <span class="label">Contact / feedback</span>
+        <p class="guest-notice"><a href="mailto:jt90272@email.vccs.edu">jt90272@email.vccs.edu</a></p>
+      </div>
+      <div class="set-row">
+        <span class="label">Desktop keyboard</span>
+        <p class="guest-notice">1–6 pick an answer, N next, S settings, Esc closes settings.</p>
+      </div>
+      <div class="set-row">
+        <span class="label">Leaderboard on this device</span>
+        <button type="button" id="downloadLbBtn" class="btn-secondary">Download scores</button>
+      </div>
+      <div class="set-row">
+        <span class="label">Needs-work</span>
+        <p id="needsWorkNote" class="guest-notice">Missed species are saved on this device.</p>
+        <button type="button" id="clearNeedsBtn" class="btn-secondary">Clear needs-work</button>
       </div>
 
       <!-- Input Style: Multiple Choice vs Typing Mode (multi-select) -->
