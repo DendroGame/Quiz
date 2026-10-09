@@ -1085,6 +1085,89 @@ function initQuizControls() {
   document.getElementById('typeAnswerInput')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleTypedAnswer();
   });
+  initExtraSettings();
+}
+
+/* v1.0.21.M – older-quiz settings that were not already in this app */
+const extraSettings = {
+  lookalikes: false, infiniteFlash: false, noTimer: false, suggest: true,
+  noPics: false, readAloud: false, voice: "question", pron: false,
+  familyOnQ: false, showMatches: false, selectedOnly: true, familyOnOpt: false,
+  lobster: false, needsWorkOnly: false, picAt: 0, btnSize: 1
+};
+let needsWork = new Set();
+try { needsWork = new Set(JSON.parse(localStorage.getItem("dendro_needs_work") || "[]")); } catch (e) {}
+
+function initExtraSettings() {
+  const bind = (id, key, fn) => {
+    document.getElementById(id)?.addEventListener("change", (e) => {
+      extraSettings[key] = e.target.checked;
+      if (fn) fn();
+    });
+  };
+  bind("lookalikeToggle", "lookalikes");
+  bind("infiniteFlashToggle", "infiniteFlash");
+  bind("noTimerToggle", "noTimer");
+  bind("suggestToggle", "suggest");
+  bind("noPicsToggle", "noPics", applyPictureVisibility);
+  bind("readAloudToggle", "readAloud");
+  bind("pronToggle", "pron");
+  bind("familyOnQToggle", "familyOnQ");
+  bind("showMatchesToggle", "showMatches");
+  bind("selectedOnlyToggle", "selectedOnly");
+  bind("familyOnOptToggle", "familyOnOpt");
+  bind("lobsterToggle", "lobster", () => document.body.classList.toggle("lobster-font", extraSettings.lobster));
+  bind("needsWorkToggle", "needsWorkOnly");
+  document.getElementById("btnSizeSlider")?.addEventListener("input", (e) => {
+    extraSettings.btnSize = parseInt(e.target.value, 10);
+    const label = document.getElementById("btnSizeLabel");
+    const names = ["Smaller", "Medium", "Larger"];
+    if (label) label.textContent = names[extraSettings.btnSize] || "Medium";
+    document.documentElement.style.setProperty("--option-pad", ["8px 10px", "12px", "16px 14px"][extraSettings.btnSize]);
+  });
+  document.getElementById("picAtSlider")?.addEventListener("input", (e) => {
+    extraSettings.picAt = parseInt(e.target.value, 10);
+    const label = document.getElementById("picAtLabel");
+    if (label) label.textContent = extraSettings.picAt ? extraSettings.picAt + "s left" : "After answer";
+  });
+  document.querySelectorAll("#voiceSelect .mode-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#voiceSelect .mode-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      extraSettings.voice = btn.dataset.voice;
+    });
+  });
+  document.getElementById("downloadLbBtn")?.addEventListener("click", () => {
+    const blob = new Blob([document.getElementById("leaderboardList")?.innerText || ""], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "dendrology-scores.txt";
+    a.click();
+  });
+  document.getElementById("clearNeedsBtn")?.addEventListener("click", () => {
+    needsWork = new Set();
+    localStorage.removeItem("dendro_needs_work");
+    const note = document.getElementById("needsWorkNote");
+    if (note) note.textContent = "Needs-work list cleared.";
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+    if (e.key === "s" || e.key === "S") document.getElementById("settingsBtn")?.click();
+    if (e.key === "Escape") document.getElementById("closeSidebarBtn")?.click();
+    if (e.key === "n" || e.key === "N") document.getElementById("nextBtn")?.click();
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= 6) document.querySelectorAll("#options .option")[n - 1]?.click();
+  });
+}
+
+function applyPictureVisibility() {
+  document.getElementById("imageWrap")?.classList.toggle("hidden", extraSettings.noPics);
+}
+
+function speakQuestion(text) {
+  if (!extraSettings.readAloud || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 }
 
 function shuffle(arr) {
@@ -1107,6 +1190,9 @@ function shuffle(arr) {
    -------------------------------------------------------------------------- */
 function launchGame() {
   syncActivePool();
+  if (extraSettings.needsWorkOnly && needsWork.size) {
+    activeSpeciesPool = activeSpeciesPool.filter(sp => needsWork.has(sp.id));
+  }
   if (activeSpeciesPool.length === 0) {
     alert("Your species selection is empty! Pick at least 2 species in the Species Picker.\n\nIf you loaded a preset, those species may be missing from the enabled databases — check Settings → Database priority.");
     return;
@@ -1172,11 +1258,36 @@ function showQuestion() {
     promptEl.textContent = `${displayCommon(sp)} (${sp.scientific})`;
     acceptedAnswers = familyNamesFor(sp);
     currentCorrect = acceptedAnswers.join(" or ");
+  } else if (currentMode === 'identify') {
+    promptLabel.textContent = 'Identification';
+    promptEl.textContent = 'What species is this?';
+    const forms = [];
+    if (document.getElementById("idCommonToggle")?.checked !== false) forms.push(displayCommon(sp));
+    if (document.getElementById("idSciToggle")?.checked) forms.push(sp.scientific);
+    acceptedAnswers = forms.length ? forms : [displayCommon(sp)];
+    currentCorrect = acceptedAnswers[0];
+    hintUsedThisQ = true;
+  } else if (currentMode === 'flash') {
+    promptLabel.textContent = 'Flash card';
+    promptEl.textContent = displayCommon(sp);
+    acceptedAnswers = [sp.scientific, displayCommon(sp)];
+    currentCorrect = sp.scientific;
+  } else if (currentMode === 'invasive') {
+    promptLabel.textContent = 'Invasive or not?';
+    promptEl.textContent = `${displayCommon(sp)} (${sp.scientific})`;
+    const yes = /yes|true|invasive/i.test(String(sp.invasive || ""));
+    acceptedAnswers = [yes ? "Invasive" : "Not invasive"];
+    currentCorrect = acceptedAnswers[0];
   } else {
     promptLabel.textContent = 'Common Name';
     promptEl.textContent = sp.scientific;
     currentCorrect = displayCommon(sp);
   }
+
+  if (extraSettings.pron && sp.pron) promptEl.textContent += ` (${sp.pron})`;
+  if (extraSettings.familyOnQ) promptEl.textContent += ` — ${familyNamesFor(sp).join(" / ")}`;
+  speakQuestion(extraSettings.voice === "name" ? promptEl.textContent : `${promptLabel.textContent}. ${promptEl.textContent}`);
+  applyPictureVisibility();
 
   document.getElementById('qNum').textContent = qIndex + 1;
   document.getElementById('totalQ').textContent = TOTAL;
@@ -1211,13 +1322,24 @@ function showQuestion() {
     typeArea?.classList.add('hidden');
     optionsEl?.classList.remove('hidden');
 
-    const accepted = currentMode === 'family' ? familyNamesFor(sp) : [currentCorrect];
-    let choices = [accepted[0]];
-    const distractorPool = masterSpecies
-      .flatMap(item => currentMode === 'common-to-sci' ? [item.scientific] : (currentMode === 'family' ? familyNamesFor(item) : [displayCommon(item)]))
-      .filter((v, i, self) => v && !accepted.some(a => a.toLowerCase() === v.toLowerCase()) && self.indexOf(v) === i);
-
-    shuffle(distractorPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
+    const pool = extraSettings.selectedOnly ? activeSpeciesPool : masterSpecies;
+    const accepted = currentMode === 'invasive'
+      ? ["Invasive", "Not invasive"]
+      : (currentMode === 'family' ? familyNamesFor(sp) : [currentCorrect]);
+    let choices = currentMode === 'invasive' ? ["Invasive", "Not invasive"] : [accepted[0]];
+    if (currentMode !== 'invasive') {
+      let distractorPool = pool
+        .flatMap(item => currentMode === 'common-to-sci' || (currentMode === 'identify' && document.getElementById("idSciToggle")?.checked && !document.getElementById("idCommonToggle")?.checked)
+          ? [item.scientific]
+          : (currentMode === 'family' ? familyNamesFor(item) : [displayCommon(item)]));
+      if (extraSettings.lookalikes) {
+        const genus = (sp.scientific || "").split(" ")[0].toLowerCase();
+        const same = distractorPool.filter((_, i) => (pool[i]?.scientific || "").split(" ")[0].toLowerCase() === genus);
+        if (same.length >= NUM_CHOICES - 1) distractorPool = same;
+      }
+      distractorPool = distractorPool.filter((v, i, self) => v && !accepted.some(a => a.toLowerCase() === v.toLowerCase()) && self.indexOf(v) === i);
+      shuffle(distractorPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
+    }
 
     shuffle(choices).forEach(opt => {
       const btn = document.createElement('button');
@@ -1267,6 +1389,17 @@ function selectAnswer(btn, chosen) {
       feedback.textContent = `✗ Wrong — Correct: ${currentCorrect}`;
       feedback.className = 'feedback wrong';
     }
+    needsWork.add(questions[qIndex]?.id);
+    localStorage.setItem("dendro_needs_work", JSON.stringify([...needsWork]));
+  }
+
+  if (extraSettings.showMatches || extraSettings.familyOnOpt) {
+    optionsEl?.querySelectorAll('.option').forEach(o => {
+      const match = masterSpecies.find(s => [displayCommon(s), s.scientific, ...familyNamesFor(s)].some(v => (v || "").toLowerCase() === o.textContent.toLowerCase()));
+      if (!match) return;
+      if (extraSettings.showMatches) o.textContent += ` — ${o.textContent.toLowerCase() === displayCommon(match).toLowerCase() ? match.scientific : displayCommon(match)}`;
+      if (extraSettings.familyOnOpt) o.textContent += ` (${familyNamesFor(match)[0] || match.family})`;
+    });
   }
 
   feedback?.classList.remove('hidden');
@@ -1280,6 +1413,11 @@ function selectAnswer(btn, chosen) {
 
 function nextQuestion() {
   qIndex++;
+  if (extraSettings.infiniteFlash && currentMode === "flash") {
+    qIndex = qIndex % questions.length;
+    showQuestion();
+    return;
+  }
   if (qIndex < questions.length) {
     showQuestion();
   } else {
@@ -1403,11 +1541,16 @@ function stopTimer() {
 
 function startTimer() {
   stopTimer();
+  if (extraSettings.noTimer) {
+    if (timerText) timerText.textContent = "—";
+    return;
+  }
   timeLeft = TIME_LIMIT;
   updateTimerDisplay();
   timerId = setInterval(() => {
     timeLeft--;
     updateTimerDisplay();
+    if (extraSettings.picAt && timeLeft <= extraSettings.picAt) revealImage();
     if (timeLeft <= 0) {
       stopTimer();
       if (!answered) selectAnswer(document.createElement('div'), '');
