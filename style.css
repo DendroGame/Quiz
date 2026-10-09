@@ -548,9 +548,13 @@ body {
 .sidebar-backdrop, .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.45);
   z-index: 200;
+}
+
+.modal-card, .wide-card {
+  z-index: 400;
+  opacity: 1;
 }
 
 .settings-sidebar {
@@ -634,7 +638,10 @@ body {
   accent-color: var(--accent);
 }
 
-.option { padding: var(--option-pad, 12px); }
+.pie-box { display: flex; gap: 10px; align-items: center; }
+.pie { width: 92px; height: 92px; border-radius: 50%; flex: none; }
+.pie-legend { list-style: none; font-size: 0.75rem; }
+.pie-legend span { display: inline-block; width: 8px; height: 8px; margin-right: 6px; }
 body.lobster-font, body.lobster-font button, body.lobster-font input { font-family: Lobster, Georgia, serif; }
 .chk-label { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 0.85rem; }
   display: flex;
