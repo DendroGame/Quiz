@@ -86,6 +86,7 @@ let score = 0;
 let streak = 0;
 let qIndex = 0;
 let currentCorrect = '';             // the correct answer string for this Q
+let acceptedAnswers = [];            // v1.0.15.M – family mode may accept modern and/or older name
 let questions = [];                  // shuffled slice of activeSpeciesPool
 let timerId = null;
 let timeLeft = TIME_LIMIT;
@@ -239,7 +240,9 @@ function normalizeRecord(item, idx, sourceKey, localBudMap) {
     id,
     common: common || scientific || "Unknown",
     scientific: scientific || common || "Unknown Species",
-    family: item.family || item.family_modern || (item.familyNum ? `Family #${item.familyNum}` : "Unknown"),
+    family: item.family_modern || item.family || (item.familyNum ? `Family #${item.familyNum}` : "Unknown"),
+    familyModern: (item.family_modern || item.family || "").trim(),
+    familyLegacy: (item.family_legacy || item.family || "").trim(),
     spinzam_url: spinzam,
     source: sourceKey
   };
@@ -506,6 +509,7 @@ function initSpeciesModal() {
   document.getElementById('savePresetCloudBtn')?.addEventListener('click', () => savePresetToCloudflare(false));
   document.getElementById('updatePresetCloudBtn')?.addEventListener('click', () => savePresetToCloudflare(true));
   document.getElementById('addSpeciesBtn')?.addEventListener('click', addCustomSpecies);
+  document.getElementById('presetCsvInput')?.addEventListener('change', importPresetFromCsv);
 }
 
 function renderSpeciesGrid() {
@@ -555,10 +559,17 @@ function renderFamilySidebar() {
   const container = document.getElementById('familyListItems');
   if (!container) return;
 
+  /* v1.0.15.M – list modern and older family names separately */
   const familyGroups = {};
   masterSpecies.forEach(sp => {
-    familyGroups[sp.family] = familyGroups[sp.family] || [];
-    familyGroups[sp.family].push(sp.id);
+    const names = new Set();
+    if (sp.familyModern) names.add(sp.familyModern);
+    if (sp.familyLegacy && sp.familyLegacy !== sp.familyModern) names.add(sp.familyLegacy);
+    if (!names.size && sp.family) names.add(sp.family);
+    names.forEach(fam => {
+      familyGroups[fam] = familyGroups[fam] || [];
+      familyGroups[fam].push(sp.id);
+    });
   });
 
   container.innerHTML = '';
@@ -574,7 +585,7 @@ function renderFamilySidebar() {
     row.querySelector('.fam-name').addEventListener('click', () => {
       const searchInput = document.getElementById('speciesSearchInput');
       if (searchInput) searchInput.value = fam;
-      filteredSpecies = fuseInstance ? fuseInstance.search(fam).map(r => r.item) : masterSpecies.filter(s => s.family === fam);
+      filteredSpecies = masterSpecies.filter(s => speciesInFamily(s, fam));
       renderSpeciesGrid();
     });
 
@@ -586,6 +597,22 @@ function renderFamilySidebar() {
 
     container.appendChild(row);
   });
+}
+
+function speciesInFamily(sp, fam) {
+  const f = fam.toLowerCase();
+  return [sp.family, sp.familyModern, sp.familyLegacy].some(n => (n || "").toLowerCase() === f);
+}
+
+/* v1.0.15.M – which family names count as correct */
+function familyNamesFor(sp) {
+  const modernOn = document.getElementById("familyModernToggle")?.checked !== false;
+  const legacyOn = document.getElementById("familyLegacyToggle")?.checked !== false;
+  const names = [];
+  if (modernOn && sp.familyModern) names.push(sp.familyModern);
+  if (legacyOn && sp.familyLegacy) names.push(sp.familyLegacy);
+  if (!names.length) names.push(sp.familyModern || sp.familyLegacy || sp.family || "Unknown");
+  return [...new Set(names)];
 }
 
 function updatePickerUI() {
@@ -767,6 +794,41 @@ function applyCloudPreset(p, forEdit) {
   } else if (!missing.length) {
     alert(`Loaded "${p.title}" (${selectedIds.size} species).`);
   }
+}
+
+function importPresetFromCsv(e) {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const text = String(reader.result || "");
+    const names = [];
+    text.split(/\r?\n/).forEach((line, i) => {
+      if (!line.trim()) return;
+      const cell = line.split(",")[0].replace(/^"|"$/g, "").trim();
+      if (!cell) return;
+      if (i === 0 && /^(common|common name|name)$/i.test(cell)) return;
+      names.push(cell);
+    });
+    const found = [];
+    const missing = [];
+    names.forEach(name => {
+      const hit = masterSpecies.find(sp =>
+        sp.common.toLowerCase() === name.toLowerCase() ||
+        displayCommon(sp).toLowerCase() === name.toLowerCase()
+      );
+      if (hit) found.push(hit.id);
+      else missing.push(name);
+    });
+    selectedIds = new Set(found);
+    updatePickerUI();
+    syncActivePool();
+    const titleInput = document.getElementById("presetTitleInput");
+    if (titleInput && !titleInput.value) titleInput.value = file.name.replace(/\.csv$/i, "");
+    alert(`CSV loaded: ${found.length} matched${missing.length ? `, ${missing.length} not found (${missing.slice(0, 6).join(", ")})` : ""}. Save as new to keep the preset.`);
+  };
+  reader.readAsText(file);
 }
 
 function updateUpdateBtnVisibility() {
@@ -1075,6 +1137,7 @@ function showQuestion() {
   typeAnswerMode = (activeStyle === 'typing');
 
   const sp = questions[qIndex];
+  acceptedAnswers = [];
 
   if (currentMode === 'common-to-sci') {
     promptLabel.textContent = 'Scientific Name';
@@ -1083,7 +1146,8 @@ function showQuestion() {
   } else if (currentMode === 'family') {
     promptLabel.textContent = 'Botanical Family';
     promptEl.textContent = `${displayCommon(sp)} (${sp.scientific})`;
-    currentCorrect = sp.family;
+    acceptedAnswers = familyNamesFor(sp);
+    currentCorrect = acceptedAnswers.join(" or ");
   } else {
     promptLabel.textContent = 'Common Name';
     promptEl.textContent = sp.scientific;
@@ -1123,10 +1187,11 @@ function showQuestion() {
     typeArea?.classList.add('hidden');
     optionsEl?.classList.remove('hidden');
 
-    let choices = [currentCorrect];
+    const accepted = currentMode === 'family' ? familyNamesFor(sp) : [currentCorrect];
+    let choices = [accepted[0]];
     const distractorPool = masterSpecies
-      .map(item => currentMode === 'common-to-sci' ? item.scientific : (currentMode === 'family' ? item.family : displayCommon(item)))
-      .filter((v, i, self) => v !== currentCorrect && self.indexOf(v) === i);
+      .flatMap(item => currentMode === 'common-to-sci' ? [item.scientific] : (currentMode === 'family' ? familyNamesFor(item) : [displayCommon(item)]))
+      .filter((v, i, self) => v && !accepted.some(a => a.toLowerCase() === v.toLowerCase()) && self.indexOf(v) === i);
 
     shuffle(distractorPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
 
@@ -1155,7 +1220,8 @@ function selectAnswer(btn, chosen) {
   stopTimer();
 
   optionsEl?.querySelectorAll('.option').forEach(o => o.disabled = true);
-  const isMatch = chosen.toLowerCase().trim() === currentCorrect.toLowerCase().trim();
+  const accepted = (acceptedAnswers.length ? acceptedAnswers : [currentCorrect]).map(s => s.toLowerCase().trim());
+  const isMatch = accepted.includes(chosen.toLowerCase().trim());
 
   if (isMatch) {
     btn.classList.add('correct');
@@ -1169,7 +1235,7 @@ function selectAnswer(btn, chosen) {
     btn.classList.add('wrong');
     streak = 0;
     optionsEl?.querySelectorAll('.option').forEach(o => {
-      if (o.textContent.toLowerCase().trim() === currentCorrect.toLowerCase().trim()) {
+      if (accepted.includes(o.textContent.toLowerCase().trim())) {
         o.classList.add('correct');
       }
     });
