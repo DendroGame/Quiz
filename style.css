@@ -634,7 +634,9 @@ body {
   accent-color: var(--accent);
 }
 
-.chk-label {
+.option { padding: var(--option-pad, 12px); }
+body.lobster-font, body.lobster-font button, body.lobster-font input { font-family: Lobster, Georgia, serif; }
+.chk-label { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 0.85rem; }
   display: flex;
   align-items: center;
   gap: 8px;
