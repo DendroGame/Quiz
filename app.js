@@ -243,6 +243,11 @@ function normalizeRecord(item, idx, sourceKey, localBudMap) {
     family: item.family_modern || item.family || (item.familyNum ? `Family #${item.familyNum}` : "Unknown"),
     familyModern: (item.family_modern || item.family || "").trim(),
     familyLegacy: (item.family_legacy || item.family || "").trim(),
+    aliases: Array.isArray(item.aliases) ? item.aliases : [],
+    inat_photo: item.inat_photo || null,
+    inat_attribution: item.inat_attribution || "",
+    inat_license: item.inat_license || "",
+    inat_taxon_id: item.inat_taxon_id || null,
     spinzam_url: spinzam,
     source: sourceKey
   };
