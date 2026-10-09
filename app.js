@@ -462,9 +462,11 @@ function initSpeciesModal() {
   const clearBtn = document.getElementById('clearSearchBtn');
 
   const openModal = () => {
+    closeSidebar();
     modal?.classList.remove('hidden');
     backdrop?.classList.remove('hidden');
     renderSpeciesGrid();
+    renderFamilySidebar();
   };
 
   const closeModal = () => {
@@ -1150,6 +1152,8 @@ function initExtraSettings() {
     const note = document.getElementById("needsWorkNote");
     if (note) note.textContent = "Needs-work list cleared.";
   });
+  document.getElementById("knowsWellBtn")?.addEventListener("click", () => renderFamilyPie("knowsWellPie", false));
+  document.getElementById("needsPieBtn")?.addEventListener("click", () => renderFamilyPie("needsPie", true));
   document.addEventListener("keydown", (e) => {
     if (e.target && /input|textarea/i.test(e.target.tagName)) return;
     if (e.key === "s" || e.key === "S") document.getElementById("settingsBtn")?.click();
@@ -1168,6 +1172,38 @@ function speakQuestion(text) {
   if (!extraSettings.readAloud || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+}
+
+function renderFamilyPie(id, needs) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  box.classList.remove("hidden");
+  const counts = {};
+  masterSpecies.forEach(sp => {
+    const inNeeds = needsWork.has(sp.id);
+    if (needs ? !inNeeds : inNeeds) return;
+    if (!needs && !selectedIds.has(sp.id)) return;
+    const fam = sp.familyModern || sp.family || "Unknown";
+    counts[fam] = (counts[fam] || 0) + 1;
+  });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const total = entries.reduce((n, e) => n + e[1], 0) || 1;
+  if (!entries.length) {
+    box.innerHTML = `<p class="guest-notice">${needs ? "No missed species yet." : "Select species, then miss some, to compare."}</p>`;
+    return;
+  }
+  const colors = ["#3d8b6e", "#c9a227", "#6aa8c9", "#c46b4a", "#8f6bb3", "#7dba6a", "#d47a9a", "#8aa899"];
+  let start = 0;
+  const stops = entries.map((e, i) => {
+    const pct = e[1] / total * 100;
+    const part = `${colors[i]} ${start}% ${start + pct}%`;
+    start += pct;
+    return part;
+  }).join(", ");
+  box.innerHTML = `
+    <div class="pie" style="background: conic-gradient(${stops})"></div>
+    <ul class="pie-legend">${entries.map((e, i) => `<li><span style="background:${colors[i]}"></span>${e[0]} (${e[1]})</li>`).join("")}</ul>
+  `;
 }
 
 function shuffle(arr) {
