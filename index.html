@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Dendrology Quiz">
   <meta name="description" content="Virginia Tech Dendrology Master Species, Preset Creator & 3D Bud Viewer">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='40' fill='%233d8b6e'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233d8b6e'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-size='36' font-family='Georgia,serif' fill='%23e2f0d9'%3ED%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <title>Dendrology Master Quiz</title>
   <!-- Fuse.js for forgiving fuzzy search -->
@@ -44,6 +44,14 @@
         <p class="guest-notice" style="margin-bottom:6px;">Top is used first, then the next, and so on. Drag rows or use ▲ ▼. Check = include.</p>
         <div id="dbPriorityList" class="db-priority-list"></div>
         <p id="dbStatusNote" class="guest-notice" style="margin-top:6px;">Loading…</p>
+      </div>
+
+      <!-- v1.0.15.M – modern vs older family names (one or both count) -->
+      <div class="set-row">
+        <span class="label">Family names that count</span>
+        <p class="guest-notice" style="margin-bottom:6px;">Example: maples are Sapindaceae now, Aceraceae before. Check one or both.</p>
+        <label class="chk-label"><input type="checkbox" id="familyModernToggle" checked /> Modern name (Sapindaceae)</label>
+        <label class="chk-label"><input type="checkbox" id="familyLegacyToggle" checked /> Older name (Aceraceae)</label>
       </div>
 
       <!-- Quiz Mode: Sci→Common / Common→Sci / Family Names (multi-select) -->
@@ -163,6 +171,9 @@
         <input type="text" id="presetAuthorInput" placeholder="Your name" maxlength="20">
         <button type="button" id="savePresetCloudBtn" class="btn-primary">☁️ Save as new</button>
         <button type="button" id="updatePresetCloudBtn" class="btn-secondary hidden">💾 Update preset</button>
+        <label class="btn-secondary" style="cursor:pointer;">CSV of common names
+          <input type="file" id="presetCsvInput" accept=".csv,text/csv" hidden>
+        </label>
       </div>
       <div class="preset-list-panel">
         <span class="label">Cloud presets</span>
