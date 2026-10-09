@@ -48,8 +48,8 @@
 
       <!-- v1.0.15.M – modern vs older family names (one or both count) -->
       <div class="set-row">
-        <span class="label">Family names that count</span>
-        <p class="guest-notice" style="margin-bottom:6px;">Example: maples are Sapindaceae now, Aceraceae before. Check one or both.</p>
+        <span class="label">Family names that count as correct</span>
+        <p class="guest-notice" style="margin-bottom:6px;">For renamed families, check modern, older, or both. Maples: Sapindaceae and Aceraceae.</p>
         <label class="chk-label"><input type="checkbox" id="familyModernToggle" checked /> Modern name (Sapindaceae)</label>
         <label class="chk-label"><input type="checkbox" id="familyLegacyToggle" checked /> Older name (Aceraceae)</label>
       </div>
@@ -145,6 +145,7 @@
     <div class="picker-body">
       <aside class="family-sidebar" id="familySidebarList">
         <h3>Families</h3>
+        <p class="guest-notice">Renamed families list both names. Check one or both.</p>
         <div id="familyListItems"></div>
       </aside>
       <main class="species-grid" id="speciesResultGrid">
