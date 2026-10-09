@@ -38,19 +38,9 @@ const DATABASES = {
     files: ["./VTDendroSpecies.json", "./species.json"],
     budScan: "./VTBudScan.json"
   },
-  osu: {
-    label: "OSU",
-    files: ["./OSUspecies.json"]
-  },
   arborday: {
     label: "Arbor Day",
     files: ["./Arbor_DaySpecies.json"]
-  },
-  /* v1.0.5.M – iNaturalist live API option */
-  inat: {
-    label: "iNaturalist (live)",
-    type: "api",
-    files: []
   }
 };
 
@@ -62,12 +52,10 @@ let filteredSpecies = [];            // current search results
 let fuseInstance = null;             // Fuse.js instance for fuzzy search
 let budScanMap = {};                 // id → Spinzam embed URL
 
-/* v1.0.9.M – database priority (top first). enabled flags + order persisted */
+/* v1.0.13.M – OSU and iNaturalist removed from priority list */
 let dbPriority = [
   { key: "vt", enabled: true },
-  { key: "osu", enabled: false },
-  { key: "arborday", enabled: false },
-  { key: "inat", enabled: false }
+  { key: "arborday", enabled: false }
 ];
 
 /* v1.0.9.M – active cloud preset being edited + per-preset common-name overrides */
@@ -143,7 +131,11 @@ function loadDbPriorityFromStorage() {
     const raw = localStorage.getItem("dendro_db_priority");
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length) dbPriority = parsed;
+      if (Array.isArray(parsed) && parsed.length) {
+        /* v1.0.13.M – drop removed sources (osu, inat) */
+        const kept = parsed.filter(e => DATABASES[e.key]);
+        if (kept.length) dbPriority = kept;
+      }
     }
   } catch (e) {}
 }
@@ -1361,11 +1353,12 @@ async function loadPhoto(sp) {
   }
   if (imgPlaceholder) imgPlaceholder.style.opacity = '0.4';
   if (imgLoading) imgLoading.classList.remove('hidden');
+  setPhotoCredit("");
 
   const commonSlug = sp.common.toLowerCase().replace(/[^a-z0-9]/g, '_');
   const sciClean = sp.scientific.replace(/spp\.?/i, '').trim();
 
-  // Primary: Cloudflare R2
+  // Primary: Cloudflare R2 diagnostic photos
   const r2Url = `${CLOUDFLARE_R2_BASE}/${commonSlug}_image/${commonSlug}_leaf_image.jpg`;
   const imgTest = new Image();
   imgTest.src = r2Url;
@@ -1374,26 +1367,60 @@ async function loadPhoto(sp) {
     if (speciesImg) {
       speciesImg.src = r2Url;
       if (imgLoading) imgLoading.classList.add('hidden');
+      /* v1.0.14.M – credit for owned diagnostic photos */
+      setPhotoCredit("Photo: Dendrology Master diagnostic collection");
       if (hintUsedThisQ) revealImage();
     }
   };
 
   imgTest.onerror = async () => {
-    // Secondary: iNaturalist Lookup
+    // Secondary: iNaturalist — credit the photographer and license
     try {
       const res = await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sciClean)}&per_page=1`);
       const data = await res.json();
       const taxon = data.results?.[0];
-      if (taxon?.default_photo?.medium_url && speciesImg) {
-        speciesImg.src = taxon.default_photo.medium_url;
+      const photo = taxon?.default_photo;
+      const nameOk = taxon && (taxon.name || "").toLowerCase() === sciClean.toLowerCase();
+      if (nameOk && photo?.medium_url && speciesImg) {
+        speciesImg.src = photo.medium_url;
         if (imgLoading) imgLoading.classList.add('hidden');
+        setPhotoCredit(inaturalistCredit(taxon, photo), taxon.id ? `https://www.inaturalist.org/taxa/${taxon.id}` : "https://www.inaturalist.org");
         if (hintUsedThisQ) revealImage();
         return;
       }
     } catch (e) {}
 
     if (imgLoading) imgLoading.classList.add('hidden');
+    setPhotoCredit("No photo available");
   };
+}
+
+/* v1.0.14.M – show the credit that matches the photo actually displayed */
+function setPhotoCredit(text, href) {
+  const el = document.getElementById("imgCredit");
+  if (!el) return;
+  el.textContent = "";
+  if (!text) {
+    el.classList.add("hidden");
+    return;
+  }
+  el.classList.remove("hidden");
+  if (href) {
+    const a = document.createElement("a");
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = text;
+    el.appendChild(a);
+  } else {
+    el.textContent = text;
+  }
+}
+
+function inaturalistCredit(taxon, photo) {
+  const who = photo.attribution || "iNaturalist contributor";
+  const license = photo.license_code ? ` (${photo.license_code})` : "";
+  return `Photo: ${who}${license} · iNaturalist`;
 }
 
 function revealImage() {
