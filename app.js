@@ -574,27 +574,28 @@ function renderFamilySidebar() {
 
   container.innerHTML = '';
   Object.keys(familyGroups).sort().forEach(fam => {
-    const ids = familyGroups[fam];
-    const row = document.createElement('div');
+    const ids = [...new Set(familyGroups[fam])];
+    const isLegacy = masterSpecies.some(sp => (sp.familyLegacy || "").toLowerCase() === fam.toLowerCase() && (sp.familyModern || "").toLowerCase() !== fam.toLowerCase());
+    const row = document.createElement('label');
     row.className = 'fam-sidebar-item';
     row.innerHTML = `
-      <span class="fam-name" title="${fam}">${fam} (${ids.length})</span>
-      <button type="button" class="fam-btn-add" title="Add all in ${fam}">+ All</button>
+      <input type="checkbox" class="fam-check" />
+      <span class="fam-name" title="${fam}">${fam}${isLegacy ? " (older)" : ""} (${ids.length})</span>
     `;
-
-    row.querySelector('.fam-name').addEventListener('click', () => {
+    const box = row.querySelector('.fam-check');
+    box.addEventListener('change', () => {
+      if (box.checked) ids.forEach(id => selectedIds.add(id));
+      else ids.forEach(id => selectedIds.delete(id));
+      updatePickerUI();
+      syncActivePool();
+    });
+    row.querySelector('.fam-name').addEventListener('click', (e) => {
+      e.preventDefault();
       const searchInput = document.getElementById('speciesSearchInput');
       if (searchInput) searchInput.value = fam;
       filteredSpecies = masterSpecies.filter(s => speciesInFamily(s, fam));
       renderSpeciesGrid();
     });
-
-    row.querySelector('.fam-btn-add').addEventListener('click', (e) => {
-      e.stopPropagation();
-      ids.forEach(id => selectedIds.add(id));
-      updatePickerUI();
-    });
-
     container.appendChild(row);
   });
 }
