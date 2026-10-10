@@ -178,6 +178,25 @@
       <button type="button" id="closeSpeciesModalBtn" class="close-btn">&times;</button>
     </div>
 
+    <!-- v1.0.25.M – presets first -->
+    <div class="preset-footer">
+      <div class="preset-list-panel">
+        <span class="label">Cloud presets</span>
+        <div id="cloudPresetList" class="cloud-preset-list">
+          <div class="lb-loading">Loading presets…</div>
+        </div>
+      </div>
+      <div class="preset-save-box">
+        <input type="text" id="presetTitleInput" placeholder="Preset name (e.g. Lab 4 Oaks)" maxlength="32">
+        <input type="text" id="presetAuthorInput" placeholder="Your name" maxlength="20">
+        <button type="button" id="savePresetCloudBtn" class="btn-primary">☁️ Save as new</button>
+        <button type="button" id="updatePresetCloudBtn" class="btn-secondary hidden">💾 Update preset</button>
+        <label class="btn-secondary" style="cursor:pointer;">CSV of common names
+          <input type="file" id="presetCsvInput" accept=".csv,text/csv" hidden>
+        </label>
+      </div>
+    </div>
+
     <!-- Forgiving search bar + bulk actions (Select Filtered / Clear All / Invert) -->
     <div class="search-ribbon">
       <div class="search-input-wrap">
@@ -218,25 +237,6 @@
         <button type="button" id="addSpeciesBtn" class="btn-primary">+ Add</button>
       </div>
       <p class="guest-notice">Adds to the current selection. Use Save / Update preset to keep it.</p>
-    </div>
-
-    <!-- Cloudflare presets: list with ⋮ menu (Load / Edit / Common names) -->
-    <div class="preset-footer">
-      <div class="preset-save-box">
-        <input type="text" id="presetTitleInput" placeholder="Preset name (e.g. Lab 4 Oaks)" maxlength="32">
-        <input type="text" id="presetAuthorInput" placeholder="Your name" maxlength="20">
-        <button type="button" id="savePresetCloudBtn" class="btn-primary">☁️ Save as new</button>
-        <button type="button" id="updatePresetCloudBtn" class="btn-secondary hidden">💾 Update preset</button>
-        <label class="btn-secondary" style="cursor:pointer;">CSV of common names
-          <input type="file" id="presetCsvInput" accept=".csv,text/csv" hidden>
-        </label>
-      </div>
-      <div class="preset-list-panel">
-        <span class="label">Cloud presets</span>
-        <div id="cloudPresetList" class="cloud-preset-list">
-          <div class="lb-loading">Loading presets…</div>
-        </div>
-      </div>
     </div>
   </div>
 
