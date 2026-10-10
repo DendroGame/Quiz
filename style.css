@@ -998,7 +998,12 @@ body.lobster-font, body.lobster-font button, body.lobster-font input { font-fami
 .preset-footer {
   flex-direction: column;
   align-items: stretch;
-  gap: 12px;
+  gap: 8px;
+  padding: 8px 0 10px;
+  border-top: none;
+  border-bottom: 1px solid var(--border-subtle);
+  max-height: 220px;
+  overflow: auto;
 }
 
 .preset-save-box {
