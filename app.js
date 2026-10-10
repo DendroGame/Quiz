@@ -58,10 +58,10 @@ let filteredSpecies = [];            // current search results
 let fuseInstance = null;             // Fuse.js instance for fuzzy search
 let budScanMap = {};                 // id → Spinzam embed URL
 
-/* v1.0.20.M – top of this list is the first photo source tried */
-let dbPriority = [
+/* v1.0.24.M – fixed source order: VT Dendrology, Arbor Day, iNaturalist */
+const dbPriority = [
   { key: "vt", enabled: true },
-  { key: "arborday", enabled: false },
+  { key: "arborday", enabled: true },
   { key: "inat", enabled: true }
 ];
 
@@ -113,12 +113,10 @@ document.addEventListener('DOMContentLoaded', initApplication);
 
 async function initApplication() {
   cacheDOM();
-  loadDbPriorityFromStorage();
   initSidebar();
   initQuizControls();
   initSpeciesModal();
   initImageResizer();
-  initDbPriorityUI();
   initAliasModal();
   
   // Non-blocking leaderboard fetch (failure is fine – user can still play)
@@ -134,99 +132,10 @@ async function initApplication() {
    Merges enabled sources in priority order (first wins on same scientific name).
    -------------------------------------------------------------------------- */
 
-function loadDbPriorityFromStorage() {
-  try {
-    const raw = localStorage.getItem("dendro_db_priority");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length) {
-        const kept = parsed.filter(e => DATABASES[e.key]);
-        Object.keys(DATABASES).forEach(key => {
-          if (!kept.some(e => e.key === key)) kept.push({ key, enabled: key === "inat" });
-        });
-        if (kept.length) dbPriority = kept;
-      }
-    }
-  } catch (e) {}
-}
-
-function saveDbPriorityToStorage() {
-  try {
-    localStorage.setItem("dendro_db_priority", JSON.stringify(dbPriority));
-  } catch (e) {}
-}
-
-/* v1.0.11.M – reorderable priority: top = first source pulled */
-function initDbPriorityUI() {
-  renderDbPriorityList();
-}
-
-function renderDbPriorityList() {
-  const list = document.getElementById("dbPriorityList");
-  if (!list) return;
-  list.innerHTML = "";
-  dbPriority.forEach((entry, idx) => {
-    const db = DATABASES[entry.key];
-    if (!db) return;
-    const row = document.createElement("div");
-    row.className = "db-priority-row";
-    row.draggable = true;
-    row.dataset.idx = String(idx);
-    row.innerHTML = `
-      <span class="db-handle" title="Drag to reorder">⠿</span>
-      <span class="db-rank">${idx + 1}</span>
-      <input type="checkbox" data-key="${entry.key}" ${entry.enabled ? "checked" : ""} title="Include this source">
-      <span class="db-label">${db.label}</span>
-      <button type="button" class="db-move" data-dir="up" data-idx="${idx}" ${idx === 0 ? "disabled" : ""}>▲</button>
-      <button type="button" class="db-move" data-dir="down" data-idx="${idx}" ${idx === dbPriority.length - 1 ? "disabled" : ""}>▼</button>
-    `;
-    row.querySelector('input[type="checkbox"]').addEventListener("change", async (e) => {
-      entry.enabled = e.target.checked;
-      saveDbPriorityToStorage();
-      await reloadFromPriority();
-    });
-    row.querySelectorAll(".db-move").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const i = parseInt(btn.dataset.idx, 10);
-        const dir = btn.dataset.dir;
-        const j = dir === "up" ? i - 1 : i + 1;
-        if (j < 0 || j >= dbPriority.length) return;
-        const tmp = dbPriority[i];
-        dbPriority[i] = dbPriority[j];
-        dbPriority[j] = tmp;
-        saveDbPriorityToStorage();
-        renderDbPriorityList();
-        await reloadFromPriority();
-      });
-    });
-    row.addEventListener("dragstart", (e) => {
-      row.classList.add("dragging");
-      e.dataTransfer.setData("text/plain", String(idx));
-      e.dataTransfer.effectAllowed = "move";
-    });
-    row.addEventListener("dragend", () => row.classList.remove("dragging"));
-    row.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      row.classList.add("drag-over");
-    });
-    row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
-    row.addEventListener("drop", async (e) => {
-      e.preventDefault();
-      row.classList.remove("drag-over");
-      const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
-      const to = idx;
-      if (Number.isNaN(from) || from === to) return;
-      const item = dbPriority.splice(from, 1)[0];
-      dbPriority.splice(to, 0, item);
-      saveDbPriorityToStorage();
-      renderDbPriorityList();
-      await reloadFromPriority();
-    });
-    list.appendChild(row);
-  });
-}
+function loadDbPriorityFromStorage() {}
+function saveDbPriorityToStorage() {}
+function initDbPriorityUI() {}
+function renderDbPriorityList() {}
 
 function normalizeRecord(item, idx, sourceKey, localBudMap) {
   const scientific = (item.scientific || "").trim();
@@ -374,7 +283,7 @@ function warnMissingSpecies(missingIds, context) {
     `${context || "Warning"}:\n\n` +
     `${missingIds.length} selected species(s) are not in the enabled database(s).\n` +
     `Missing id(s): ${sample}${more}\n\n` +
-    `Try enabling more sources in Database priority (Settings), or remove them from the preset.`;
+    `Try a different preset, or add the missing species.`;
   alert(msg);
   const status = document.getElementById("poolStatusSubtitle");
   if (status) {
@@ -1231,7 +1140,7 @@ function launchGame() {
     activeSpeciesPool = activeSpeciesPool.filter(sp => needsWork.has(sp.id));
   }
   if (activeSpeciesPool.length === 0) {
-    alert("Your species selection is empty! Pick at least 2 species in the Species Picker.\n\nIf you loaded a preset, those species may be missing from the enabled databases — check Settings → Database priority.");
+    alert("Your species selection is empty! Pick at least 2 species in the Species Picker.");
     return;
   }
 
