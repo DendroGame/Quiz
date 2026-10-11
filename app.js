@@ -1476,7 +1476,7 @@ function selectAnswer(btn, chosen) {
     btn.classList.add('wrong');
     streak = 0;
     optionsEl?.querySelectorAll('.option').forEach(o => {
-      if (accepted.includes(o.textContent.toLowerCase().trim())) {
+      if (accepted.includes((o.dataset.answer || o.textContent).toLowerCase().trim())) {
         o.classList.add('correct');
       }
     });
