@@ -1064,14 +1064,125 @@ function initExtraSettings() {
   });
   document.getElementById("knowsWellBtn")?.addEventListener("click", () => renderFamilyPie("knowsWellPie", false));
   document.getElementById("needsPieBtn")?.addEventListener("click", () => renderFamilyPie("needsPie", true));
-  document.addEventListener("keydown", (e) => {
-    if (e.target && /input|textarea/i.test(e.target.tagName)) return;
-    if (e.key === "s" || e.key === "S") document.getElementById("settingsBtn")?.click();
-    if (e.key === "Escape") document.getElementById("closeSidebarBtn")?.click();
-    if (e.key === "n" || e.key === "N") document.getElementById("nextBtn")?.click();
-    const n = parseInt(e.key, 10);
-    if (n >= 1 && n <= 6) document.querySelectorAll("#options .option")[n - 1]?.click();
+  initKeyboard();
+}
+
+/* v1.0.26.M – full keyboard: arrows move highlight, Enter presses, answers 1-6 and U I J K N M */
+const DEFAULT_KEYS = {
+  answer1: "Digit1", answer2: "Digit2", answer3: "Digit3",
+  answer4: "Digit4", answer5: "Digit5", answer6: "Digit6",
+  cluster1: "KeyU", cluster2: "KeyI", cluster3: "KeyJ",
+  cluster4: "KeyK", cluster5: "KeyN", cluster6: "KeyM",
+  next: "Enter", hint: "KeyH", settings: "KeyS", presets: "KeyP",
+  guest: "KeyG", cancel: "Escape", home: "KeyB", search: "Slash"
+};
+const KEY_LABELS = {
+  answer1: "Answer 1", answer2: "Answer 2", answer3: "Answer 3",
+  answer4: "Answer 4", answer5: "Answer 5", answer6: "Answer 6",
+  cluster1: "Answer 1 (U)", cluster2: "Answer 2 (I)", cluster3: "Answer 3 (J)",
+  cluster4: "Answer 4 (K)", cluster5: "Answer 5 (N)", cluster6: "Answer 6 (M)",
+  next: "Next question", hint: "Reveal picture", settings: "Settings",
+  presets: "Presets", guest: "Play as guest", cancel: "Close / cancel",
+  home: "Home", search: "Search species"
+};
+let keybinds = { ...DEFAULT_KEYS };
+let kbIndex = 0;
+let listeningBind = null;
+
+function initKeyboard() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("dendro_keybinds") || "{}");
+    keybinds = { ...DEFAULT_KEYS, ...saved };
+  } catch (e) {}
+  renderKeybindList();
+  document.getElementById("resetKeysBtn")?.addEventListener("click", () => {
+    keybinds = { ...DEFAULT_KEYS };
+    localStorage.setItem("dendro_keybinds", JSON.stringify(keybinds));
+    renderKeybindList();
   });
+  document.addEventListener("keydown", onGameKey);
+}
+
+function renderKeybindList() {
+  const list = document.getElementById("keybindList");
+  if (!list) return;
+  list.innerHTML = "";
+  Object.keys(KEY_LABELS).forEach(action => {
+    const row = document.createElement("div");
+    row.className = "keybind-row";
+    row.innerHTML = `<span>${KEY_LABELS[action]}</span><button type="button" data-action="${action}">${prettyKey(keybinds[action])}</button>`;
+    row.querySelector("button").addEventListener("click", () => {
+      listeningBind = action;
+      row.querySelector("button").textContent = "Press key…";
+    });
+    list.appendChild(row);
+  });
+}
+
+function prettyKey(code) {
+  return (code || "").replace("Digit", "").replace("Key", "").replace("Slash", "/");
+}
+
+function actionFor(code) {
+  return Object.keys(keybinds).find(k => keybinds[k] === code);
+}
+
+function kbItems() {
+  const modal = document.getElementById("speciesModal");
+  const settings = document.getElementById("settingsSidebar");
+  const quiz = document.getElementById("quizScreen");
+  const end = document.getElementById("endScreen");
+  let root = document.getElementById("startScreen");
+  if (modal && !modal.classList.contains("hidden")) root = modal;
+  else if (settings?.classList.contains("open")) root = settings;
+  else if (quiz && !quiz.classList.contains("hidden")) root = quiz;
+  else if (end && !end.classList.contains("hidden")) root = end;
+  return [...(root?.querySelectorAll("button, a, input, label, [tabindex]") || [])]
+    .filter(el => el.offsetParent && !el.disabled && !el.closest(".hidden"));
+}
+
+function setKbIndex(next) {
+  const items = kbItems();
+  if (!items.length) return;
+  items.forEach(el => el.classList.remove("kb-focus"));
+  kbIndex = (next + items.length) % items.length;
+  const el = items[kbIndex];
+  el.classList.add("kb-focus");
+  el.scrollIntoView({ block: "nearest" });
+}
+
+function onGameKey(e) {
+  if (listeningBind) {
+    e.preventDefault();
+    if (e.code !== "Escape") keybinds[listeningBind] = e.code;
+    localStorage.setItem("dendro_keybinds", JSON.stringify(keybinds));
+    listeningBind = null;
+    renderKeybindList();
+    return;
+  }
+  const typing = e.target && /input|textarea/i.test(e.target.tagName);
+  if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); setKbIndex(kbIndex + 1); return; }
+  if (e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); setKbIndex(kbIndex - 1); return; }
+  if (typing) return;
+  const action = actionFor(e.code);
+  if (action?.startsWith("answer") || action?.startsWith("cluster")) {
+    const n = parseInt(action.replace(/\D/g, ""), 10);
+    document.querySelectorAll("#options .option")[n - 1]?.click();
+    e.preventDefault();
+    return;
+  }
+  if (action === "next") { document.getElementById("nextBtn")?.click(); e.preventDefault(); return; }
+  if (action === "hint") { document.getElementById("hintBtn")?.click(); return; }
+  if (action === "settings") { document.getElementById("settingsBtn")?.click(); return; }
+  if (action === "presets") { document.getElementById("openSpeciesModalBtn")?.click(); return; }
+  if (action === "guest") { document.getElementById("guestBtn")?.click(); return; }
+  if (action === "cancel") { document.getElementById("closeSidebarBtn")?.click(); document.getElementById("closeSpeciesModalBtn")?.click(); return; }
+  if (action === "home") { document.getElementById("homeBtn")?.click(); return; }
+  if (action === "search") { document.getElementById("speciesSearchInput")?.focus(); return; }
+  if (e.key === "Enter" || e.key === " ") {
+    const hit = document.querySelector(".kb-focus");
+    if (hit) { e.preventDefault(); hit.click(); }
+  }
 }
 
 function applyPictureVisibility() {
