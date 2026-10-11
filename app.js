@@ -1077,13 +1077,14 @@ const DEFAULT_KEYS = {
   guest: "KeyG", cancel: "Escape", home: "KeyB", search: "Slash"
 };
 const KEY_LABELS = {
-  answer1: "Answer 1", answer2: "Answer 2", answer3: "Answer 3",
-  answer4: "Answer 4", answer5: "Answer 5", answer6: "Answer 6",
-  cluster1: "Answer 1 (U)", cluster2: "Answer 2 (I)", cluster3: "Answer 3 (J)",
-  cluster4: "Answer 4 (K)", cluster5: "Answer 5 (N)", cluster6: "Answer 6 (M)",
-  next: "Next question", hint: "Reveal picture", settings: "Settings",
-  presets: "Presets", guest: "Play as guest", cancel: "Close / cancel",
-  home: "Home", search: "Search species"
+  answer1: "Pick answer 1", answer2: "Pick answer 2", answer3: "Pick answer 3",
+  answer4: "Pick answer 4", answer5: "Pick answer 5", answer6: "Pick answer 6",
+  cluster1: "Pick answer 1 (letter pad)", cluster2: "Pick answer 2 (letter pad)",
+  cluster3: "Pick answer 3 (letter pad)", cluster4: "Pick answer 4 (letter pad)",
+  cluster5: "Pick answer 5 (letter pad)", cluster6: "Pick answer 6 (letter pad)",
+  next: "Go to next question", hint: "Reveal the picture", settings: "Open Settings",
+  presets: "Open species presets", guest: "Play as guest", cancel: "Close the open panel",
+  home: "Back to home screen", search: "Jump to species search"
 };
 let keybinds = { ...DEFAULT_KEYS };
 let kbIndex = 0;
@@ -1110,7 +1111,7 @@ function renderKeybindList() {
   Object.keys(KEY_LABELS).forEach(action => {
     const row = document.createElement("div");
     row.className = "keybind-row";
-    row.innerHTML = `<span>${KEY_LABELS[action]}</span><button type="button" data-action="${action}">${prettyKey(keybinds[action])}</button>`;
+    row.innerHTML = `<span class="key-action">${KEY_LABELS[action]}</span><button type="button" data-action="${action}" title="Click, then press a new key">${prettyKey(keybinds[action])}</button>`;
     row.querySelector("button").addEventListener("click", () => {
       listeningBind = action;
       row.querySelector("button").textContent = "Press key…";
@@ -1120,7 +1121,14 @@ function renderKeybindList() {
 }
 
 function prettyKey(code) {
-  return (code || "").replace("Digit", "").replace("Key", "").replace("Slash", "/");
+  const names = {
+    Digit1: "1", Digit2: "2", Digit3: "3", Digit4: "4", Digit5: "5", Digit6: "6",
+    KeyU: "U", KeyI: "I", KeyJ: "J", KeyK: "K", KeyN: "N", KeyM: "M",
+    KeyH: "H", KeyS: "S", KeyP: "P", KeyG: "G", KeyB: "B",
+    Enter: "Enter", Escape: "Esc", Slash: "/", Space: "Space",
+    ArrowUp: "Up arrow", ArrowDown: "Down arrow", ArrowLeft: "Left arrow", ArrowRight: "Right arrow"
+  };
+  return names[code] || (code || "").replace(/^Key|^Digit/, "");
 }
 
 function actionFor(code) {
