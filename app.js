@@ -94,6 +94,7 @@ let streak = 0;
 let qIndex = 0;
 let currentCorrect = '';             // the correct answer string for this Q
 let acceptedAnswers = [];            // v1.0.15.M – family mode may accept modern and/or older name
+let questions = [];
 let questionMeta = [];
 let missedItems = [];
 let missCounts = {};
