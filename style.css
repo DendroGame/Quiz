@@ -12,9 +12,9 @@
    -------------------------------------------------------------------------- */
 :root {
   --bg: #0f1a14;                 /* page background – darkest green-black */
-  --card: #182820;               /* card / panel background */
-  --option-bg: #21352b;          /* option buttons, inputs, pills */
-  --text: #e2f0d9;               /* primary readable text */
+  --card: #1a2e24;               /* v1.0.29.M original card */
+  --option-bg: #243d32;
+  --text: #e8f0eb;
   --muted: #8aa899;              /* secondary / helper text */
   --accent: #3d8b6e;             /* primary action green */
   --accent-light: #52a987;       /* hover / lighter accent */
@@ -57,7 +57,7 @@ body {
    -------------------------------------------------------------------------- */
 .app-container {
   width: 100%;
-  max-width: 640px;              /* keeps quiz readable on large screens */
+  max-width: 480px;
 }
 
 .card {
@@ -142,14 +142,9 @@ body {
   margin-bottom: 24px;
 }
 
-.btn-main, .btn-guest, .btn-ultimate {
-  width: 100%;
-  padding: 12px;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  font-size: 0.95rem;
-  border: none;
+.btn-main, .btn-guest, .btn-ultimate, .mode-btn, .count-btn, .choice-btn, .option, .next-btn, .hint-btn {
+  min-height: 48px;
+  padding: 14px 16px;
 }
 
 .btn-main {
@@ -559,20 +554,25 @@ body {
 
 .settings-sidebar {
   position: fixed;
-  top: 0;
-  right: -320px;                 /* hidden off-screen until .open */
-  width: 320px;
-  height: 100vh;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  width: min(480px, 100%);
+  margin: 0 auto;
+  height: 82vh;
   background: var(--card);
-  border-left: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px 16px 0 0;
   z-index: 210;
   display: flex;
   flex-direction: column;
-  transition: right 0.25s ease;
+  transform: translateY(110%);
+  transition: transform 0.25s ease;
 }
 
 .settings-sidebar.open {
-  right: 0;
+  transform: translateY(0);
 }
 
 .sidebar-header {
@@ -1156,3 +1156,7 @@ body.lobster-font, body.lobster-font button, body.lobster-font input { font-fami
 .keybind-row button { background: var(--option-bg); border: 1px solid var(--border-subtle); color: #a8e0c4; border-radius: 6px; padding: 4px 8px; }
 
 .key-tag { color: #c9a227; font-weight: 700; margin-right: 6px; }
+
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.flash-extra, .range-map { margin: 8px 0; font-size: 0.82rem; color: var(--muted); }
+.range-map a { color: #a8e0c4; }
