@@ -94,7 +94,11 @@ let streak = 0;
 let qIndex = 0;
 let currentCorrect = '';             // the correct answer string for this Q
 let acceptedAnswers = [];            // v1.0.15.M – family mode may accept modern and/or older name
-let questions = [];                  // shuffled slice of activeSpeciesPool
+let questionMeta = [];
+let missedItems = [];
+let missCounts = {};
+let secondChance = false;
+try { missCounts = JSON.parse(localStorage.getItem("dendro_miss_counts") || "{}"); } catch (e) {}
 let timerId = null;
 let timeLeft = TIME_LIMIT;
 let answered = false;
@@ -974,6 +978,7 @@ function initQuizControls() {
   document.getElementById('refreshLbBtn')?.addEventListener('click', fetchGlobalLeaderboard);
   nextBtn?.addEventListener('click', nextQuestion);
   document.getElementById('startOverBtn')?.addEventListener('click', launchGame);
+  document.getElementById('retryMissedBtn')?.addEventListener('click', startRetryMissed);
   document.getElementById('homeBtn')?.addEventListener('click', () => {
     endScreen?.classList.add('hidden');
     startScreen?.classList.remove('hidden');
@@ -1065,6 +1070,7 @@ function initExtraSettings() {
   document.getElementById("knowsWellBtn")?.addEventListener("click", () => renderFamilyPie("knowsWellPie", false));
   document.getElementById("needsPieBtn")?.addEventListener("click", () => renderFamilyPie("needsPie", true));
   initKeyboard();
+  initInvasiveState();
 }
 
 /* v1.0.26.M – full keyboard: arrows move highlight, Enter presses, answers 1-6 and U I J K N M */
@@ -1215,6 +1221,13 @@ function onGameKey(e) {
   if (action === "guest") { document.getElementById("guestBtn")?.click(); return; }
   if (action === "cancel") { document.getElementById("closeSidebarBtn")?.click(); document.getElementById("closeSpeciesModalBtn")?.click(); return; }
   if (action === "home") { document.getElementById("homeBtn")?.click(); return; }
+  if (e.key === "Shift" && answered && !secondChance) {
+    secondChance = true;
+    answered = false;
+    optionsEl?.querySelectorAll(".option").forEach(o => { o.disabled = false; o.classList.remove("wrong", "correct"); });
+    if (feedback) feedback.textContent = "Half-credit retry.";
+    return;
+  }
   if (action === "search") { document.getElementById("speciesSearchInput")?.focus(); return; }
   if (e.key === "Enter" || e.key === " ") {
     const hit = document.querySelector(".kb-focus");
@@ -1222,14 +1235,69 @@ function onGameKey(e) {
   }
 }
 
+function speakQuestion(text) {
+  if (!extraSettings.readAloud || !window.speechSynthesis) return;
+  const said = extraSettings.voice === "name" ? text : text;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(new SpeechSynthesisUtterance(said));
+}
+
 function applyPictureVisibility() {
   document.getElementById("imageWrap")?.classList.toggle("hidden", extraSettings.noPics);
 }
 
-function speakQuestion(text) {
-  if (!extraSettings.readAloud || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+function startRetryMissed() {
+  const items = missedItems.filter(m => masterSpecies.some(s => s.id === m.id));
+  if (!items.length) return;
+  questions = items.map(m => masterSpecies.find(s => s.id === m.id));
+  questionMeta = items.map(m => m.mode);
+  TOTAL = questions.length;
+  qIndex = 0;
+  score = 0;
+  streak = 0;
+  missedItems = [];
+  endScreen?.classList.add("hidden");
+  quizScreen?.classList.remove("hidden");
+  stats?.classList.remove("hidden");
+  showQuestion();
+}
+
+function launchConfetti() {
+  const canvas = document.getElementById("confettiCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+  const bits = Array.from({ length: 80 }, () => ({
+    x: Math.random() * canvas.width, y: -10, s: 4 + Math.random() * 4,
+    v: 2 + Math.random() * 3, c: ["#3d8b6e", "#c9a227", "#a8e0c4"][Math.floor(Math.random() * 3)]
+  }));
+  let n = 0;
+  const tick = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    bits.forEach(b => { b.y += b.v; ctx.fillStyle = b.c; ctx.fillRect(b.x, b.y, b.s, b.s); });
+    if (++n < 70) requestAnimationFrame(tick);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+  tick();
+}
+
+const STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
+function initInvasiveState() {
+  const sel = document.getElementById("invasiveStateSelect");
+  const out = document.getElementById("invasiveStateResults");
+  if (!sel || !out) return;
+  sel.innerHTML = STATES.map(s => `<option>${s}</option>`).join("");
+  const run = () => {
+    const st = sel.value.toLowerCase();
+    const hits = masterSpecies.filter(sp => {
+      const v = String(sp.invasive || "").toLowerCase();
+      return v && (v.includes(st) || v === "yes" || v === "true" || v.includes("invasive"));
+    }).slice(0, 12);
+    out.textContent = hits.length ? hits.map(sp => sp.common).join(", ") : "No state-by-state invasive flags in this database yet.";
+  };
+  sel.addEventListener("change", run);
+  run();
 }
 
 function renderFamilyPie(id, needs) {
@@ -1286,6 +1354,10 @@ function launchGame() {
   syncActivePool();
   if (extraSettings.needsWorkOnly && needsWork.size) {
     activeSpeciesPool = activeSpeciesPool.filter(sp => needsWork.has(sp.id));
+    activeSpeciesPool.sort((a, b) => (missCounts[b.id] || 0) - (missCounts[a.id] || 0));
+  }
+  if (document.getElementById("practicePresetToggle")?.checked && selectedIds.size) {
+    activeSpeciesPool = activeSpeciesPool.filter(sp => selectedIds.has(sp.id));
   }
   if (activeSpeciesPool.length === 0) {
     alert("Your species selection is empty! Pick at least 2 species in the Species Picker.");
@@ -1317,6 +1389,8 @@ function launchGame() {
     }
   }
   TOTAL = questions.length;
+  questionMeta = questions.map(() => null);
+  missedItems = [];
   qIndex = 0;
   score = 0;
   streak = 0;
@@ -1335,8 +1409,10 @@ function showQuestion() {
   if (optionsEl) optionsEl.innerHTML = '';
   answered = false;
   hintUsedThisQ = false;
+  secondChance = false;
 
-  currentMode = selectedModes[Math.floor(Math.random() * selectedModes.length)] || 'sci-to-common';
+  currentMode = questionMeta[qIndex] || selectedModes[Math.floor(Math.random() * selectedModes.length)] || 'sci-to-common';
+  questionMeta[qIndex] = currentMode;
   const activeStyle = selectedStyles[Math.floor(Math.random() * selectedStyles.length)] || 'quiz';
   typeAnswerMode = (activeStyle === 'typing');
 
@@ -1382,6 +1458,21 @@ function showQuestion() {
   if (extraSettings.familyOnQ) promptEl.textContent += ` — ${familyNamesFor(sp).join(" / ")}`;
   speakQuestion(extraSettings.voice === "name" ? promptEl.textContent : `${promptLabel.textContent}. ${promptEl.textContent}`);
   applyPictureVisibility();
+
+  const flashExtra = document.getElementById("flashExtra");
+  if (flashExtra) {
+    if (currentMode === "flash") {
+      const map = sp.inat_taxon_id ? `https://www.inaturalist.org/taxa/${sp.inat_taxon_id}` : `https://www.inaturalist.org/taxa/search?q=${encodeURIComponent(sp.scientific)}`;
+      flashExtra.classList.remove("hidden");
+      flashExtra.innerHTML = `
+        <div>Form: ${sp.form || "—"} · Leaf: ${sp.leaf || "—"}</div>
+        <div>Zones: ${sp.zones || "—"}</div>
+        <div>Range: ${sp.range || "—"}</div>
+        <div class="range-map"><a href="${map}" target="_blank" rel="noopener">Open range map</a></div>
+        <div>Notes: ${sp.pron ? "Pronunciation " + sp.pron : "—"}</div>
+      `;
+    } else flashExtra.classList.add("hidden");
+  }
 
   document.getElementById('qNum').textContent = qIndex + 1;
   document.getElementById('totalQ').textContent = TOTAL;
@@ -1466,7 +1557,7 @@ function selectAnswer(btn, chosen) {
 
   if (isMatch) {
     btn.classList.add('correct');
-    score++;
+    score += secondChance ? 0.5 : 1;
     streak++;
     if (feedback) {
       feedback.textContent = '✓ Correct!';
@@ -1485,7 +1576,11 @@ function selectAnswer(btn, chosen) {
       feedback.className = 'feedback wrong';
     }
     needsWork.add(questions[qIndex]?.id);
+    missCounts[questions[qIndex]?.id] = (missCounts[questions[qIndex]?.id] || 0) + 1;
     localStorage.setItem("dendro_needs_work", JSON.stringify([...needsWork]));
+    localStorage.setItem("dendro_miss_counts", JSON.stringify(missCounts));
+    missedItems.push({ id: questions[qIndex]?.id, mode: currentMode });
+    if (!secondChance && feedback) feedback.textContent += " Press Shift for a half-credit retry.";
   }
 
   if (extraSettings.showMatches || extraSettings.familyOnOpt) {
@@ -1543,6 +1638,9 @@ async function endQuiz() {
   const kvNotice = document.getElementById('endKvStatus');
 
   if (msgEl) msgEl.textContent = `Final Score: ${score}/${TOTAL} (${pct}%)`;
+  if (pct >= 80) launchConfetti();
+  const retry = document.getElementById("retryMissedBtn");
+  if (retry) retry.classList.toggle("hidden", !missedItems.length);
 
   if (isGuest) {
     if (kvNotice) {
