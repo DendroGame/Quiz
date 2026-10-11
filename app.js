@@ -1096,10 +1096,12 @@ function initKeyboard() {
     keybinds = { ...DEFAULT_KEYS, ...saved };
   } catch (e) {}
   renderKeybindList();
+  stampFixedKeys();
   document.getElementById("resetKeysBtn")?.addEventListener("click", () => {
     keybinds = { ...DEFAULT_KEYS };
     localStorage.setItem("dendro_keybinds", JSON.stringify(keybinds));
     renderKeybindList();
+    stampFixedKeys();
   });
   document.addEventListener("keydown", onGameKey);
 }
@@ -1118,6 +1120,32 @@ function renderKeybindList() {
     });
     list.appendChild(row);
   });
+}
+
+function answerKeyTag(n) {
+  const num = prettyKey(keybinds["answer" + n]);
+  const letter = prettyKey(keybinds["cluster" + n]);
+  return `[${num}/${letter}]`;
+}
+
+function stampKey(el, tag) {
+  if (!el) return;
+  let mark = el.querySelector(".key-tag");
+  if (!mark) {
+    mark = document.createElement("span");
+    mark.className = "key-tag";
+    el.prepend(mark);
+  }
+  mark.textContent = tag + " ";
+}
+
+function stampFixedKeys() {
+  stampKey(document.getElementById("startBtn"), `[${prettyKey(keybinds.next)}]`);
+  stampKey(document.getElementById("guestBtn"), `[${prettyKey(keybinds.guest)}]`);
+  stampKey(document.getElementById("hintBtn"), `[${prettyKey(keybinds.hint)}]`);
+  stampKey(document.getElementById("nextBtn"), `[${prettyKey(keybinds.next)}]`);
+  stampKey(document.getElementById("settingsBtn"), `[${prettyKey(keybinds.settings)}]`);
+  stampKey(document.getElementById("openSpeciesModalBtn"), `[${prettyKey(keybinds.presets)}]`);
 }
 
 function prettyKey(code) {
@@ -1166,6 +1194,7 @@ function onGameKey(e) {
     localStorage.setItem("dendro_keybinds", JSON.stringify(keybinds));
     listeningBind = null;
     renderKeybindList();
+    stampFixedKeys();
     return;
   }
   const typing = e.target && /input|textarea/i.test(e.target.tagName);
@@ -1406,10 +1435,11 @@ function showQuestion() {
       shuffle(distractorPool).slice(0, NUM_CHOICES - 1).forEach(c => choices.push(c));
     }
 
-    shuffle(choices).forEach(opt => {
+    shuffle(choices).forEach((opt, i) => {
       const btn = document.createElement('button');
       btn.className = 'option';
-      btn.textContent = opt;
+      btn.dataset.answer = opt;
+      btn.innerHTML = `<span class="key-tag">${answerKeyTag(i + 1)}</span> <span class="opt-text">${opt}</span>`;
       btn.addEventListener('click', () => selectAnswer(btn, opt));
       optionsEl?.appendChild(btn);
     });
@@ -1460,10 +1490,14 @@ function selectAnswer(btn, chosen) {
 
   if (extraSettings.showMatches || extraSettings.familyOnOpt) {
     optionsEl?.querySelectorAll('.option').forEach(o => {
-      const match = masterSpecies.find(s => [displayCommon(s), s.scientific, ...familyNamesFor(s)].some(v => (v || "").toLowerCase() === o.textContent.toLowerCase()));
+      const name = o.dataset.answer || o.textContent;
+      const match = masterSpecies.find(s => [displayCommon(s), s.scientific, ...familyNamesFor(s)].some(v => (v || "").toLowerCase() === name.toLowerCase()));
       if (!match) return;
-      if (extraSettings.showMatches) o.textContent += ` — ${o.textContent.toLowerCase() === displayCommon(match).toLowerCase() ? match.scientific : displayCommon(match)}`;
-      if (extraSettings.familyOnOpt) o.textContent += ` (${familyNamesFor(match)[0] || match.family})`;
+      const text = o.querySelector(".opt-text");
+      if (text) {
+        if (extraSettings.showMatches) text.textContent += ` — ${name.toLowerCase() === displayCommon(match).toLowerCase() ? match.scientific : displayCommon(match)}`;
+        if (extraSettings.familyOnOpt) text.textContent += ` (${familyNamesFor(match)[0] || match.family})`;
+      }
     });
   }
 
