@@ -79,7 +79,8 @@
         <label class="chk-label"><input type="checkbox" id="selectedOnlyToggle" checked /> Only use chosen species for answer options</label>
         <label class="chk-label"><input type="checkbox" id="familyOnOptToggle" /> Show family names on answer options</label>
         <label class="chk-label"><input type="checkbox" id="lobsterToggle" /> Lobster font</label>
-        <label class="chk-label"><input type="checkbox" id="needsWorkToggle" /> Only needs-work in current selection</label>
+        <label class="chk-label"><input type="checkbox" id="needsWorkToggle" /> Ranked needs-work only</label>
+        <label class="chk-label"><input type="checkbox" id="practicePresetToggle" checked /> Practice only the current preset</label>
       </div>
       <div class="set-row">
         <div class="split-label"><span class="label">Answer button size</span><span id="btnSizeLabel" class="val-highlight">Medium</span></div>
@@ -97,7 +98,10 @@
         </div>
       </div>
       <div class="set-row">
-        <span class="label">Contact / feedback</span>
+        <span class="label">Invasive by state</span>
+        <select id="invasiveStateSelect" class="player-input"></select>
+        <div id="invasiveStateResults" class="guest-notice">Pick a state.</div>
+      </div>
         <p class="guest-notice"><a href="mailto:jt90272@email.vccs.edu">jt90272@email.vccs.edu</a></p>
       </div>
       <div class="set-row">
@@ -367,6 +371,7 @@
       </div>
 
       <!-- Correct / wrong feedback + Next button -->
+      <div id="flashExtra" class="flash-extra hidden"></div>
       <div class="feedback hidden" id="feedback"></div>
       <button type="button" class="next-btn hidden" id="nextBtn">Next Question →</button>
     </section>
@@ -379,6 +384,7 @@
         <div id="endKvStatus" class="kv-notice hidden"></div>
         <div class="end-actions">
           <button type="button" class="btn-main" id="startOverBtn">Play Again</button>
+          <button type="button" class="btn-guest" id="retryMissedBtn">Retry missed</button>
           <button type="button" class="btn-guest" id="homeBtn">← Back to Main Menu</button>
         </div>
       </div>
