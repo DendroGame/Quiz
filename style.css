@@ -569,10 +569,12 @@ body {
   flex-direction: column;
   transform: translateY(110%);
   transition: transform 0.25s ease;
+  pointer-events: none;
 }
 
 .settings-sidebar.open {
   transform: translateY(0);
+  pointer-events: auto;
 }
 
 .sidebar-header {
