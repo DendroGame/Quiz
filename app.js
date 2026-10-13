@@ -838,7 +838,7 @@ function initAliasModal() {
 }
 
 function openAliasEditor(p) {
-  applyCloudPreset(p, true);
+  applyCloudPreset(p, false);
   const modal = document.getElementById("aliasModal");
   const backdrop = document.getElementById("aliasModalBackdrop");
   const list = document.getElementById("aliasList");
@@ -846,15 +846,19 @@ function openAliasEditor(p) {
   if (sub) sub.textContent = `Overrides for "${p.title}" only.`;
   list.innerHTML = "";
   const ids = (p.species || []).map(String);
+  if (!ids.length) list.innerHTML = '<p class="guest-notice">This preset has no species yet.</p>';
   ids.forEach(id => {
-    const sp = masterSpecies.find(s => s.id === id);
+    const sp = masterSpecies.find(s => s.id === id || s.scientific === id || csvNorm(s.scientific) === csvNorm(id));
+    const key = sp ? sp.id : id;
     const row = document.createElement("div");
     row.className = "alias-row";
-    const current = presetAliases[id] || (sp ? sp.common : "");
+    const current = presetAliases[key] || presetAliases[id] || (sp ? sp.common : "");
     row.innerHTML = `
       <span class="sci">${sp ? sp.scientific : id}</span>
-      <input type="text" data-id="${id}" value="${(current || "").replace(/"/g, "&quot;")}" placeholder="Common name">
+      <input type="text" data-id="${key}" placeholder="Common name">
     `;
+    const input = row.querySelector("input");
+    if (input) input.value = current || "";
     list.appendChild(row);
   });
   modal?.classList.remove("hidden");
