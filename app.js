@@ -1168,7 +1168,7 @@ function stampFixedKeys() {
 
 function prettyKey(code) {
   const names = {
-    Digit1: "1", Digit2: "2", Digit3: "3", Digit4: "4", Digit5: "5", Digit6: "6",
+    Digit1: "1", Digit2: "2", Digit3: "3", Digit4: "4", Digit5: "5", Digit6: "6", Digit7: "7", Digit8: "8",
     KeyU: "U", KeyI: "I", KeyJ: "J", KeyK: "K", KeyN: "N", KeyM: "M",
     KeyH: "H", KeyS: "S", KeyP: "P", KeyG: "G", KeyB: "B",
     Enter: "Enter", Escape: "Esc", Slash: "/", Space: "Space",
