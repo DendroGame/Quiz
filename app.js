@@ -592,6 +592,15 @@ async function savePresetToCloudflare(isUpdate) {
   if (!title && isUpdate && activePresetMeta) title = activePresetMeta.title;
   if (!title) title = `Preset (${selectedIds.size} species)`;
 
+  const taken = cloudPresetsCache.some(p =>
+    (p.title || "").trim().toLowerCase() === title.toLowerCase() &&
+    (!isUpdate || p.id !== activePresetId)
+  );
+  if (taken) {
+    alert(`A preset named "${title}" already exists. Use a different name, or open that preset and choose Edit preset.`);
+    return;
+  }
+
   const payload = {
     title,
     author,
@@ -665,7 +674,7 @@ function renderCloudPresetList() {
       <button type="button" class="preset-menu-btn" title="Options">⋮</button>
       <div class="preset-menu">
         <button type="button" data-act="load">Load</button>
-        <button type="button" data-act="edit">Edit preset</button>
+        <button type="button" data-act="edit" title="Load this list so you can change species, then Update preset">Edit species list</button>
         <button type="button" data-act="alias">Edit common names</button>
       </div>
     `;
