@@ -1166,3 +1166,5 @@ body.lobster-font, body.lobster-font button, body.lobster-font input { font-fami
 }
 #aliasModal, #aliasModalBackdrop { z-index: 500; }
 .brand h1 { letter-spacing: -0.02em; }
+
+.preset-check { accent-color: var(--accent); width: 18px; height: 18px; }
