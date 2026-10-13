@@ -901,13 +901,15 @@ function initSidebar() {
 }
 
 function initQuizControls() {
-  document.querySelectorAll('#modeSelect .mode-btn').forEach(btn => {
+  document.querySelectorAll('#modeSelect .mode-btn, #homeModeSelect .mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const allBtns = document.querySelectorAll('#modeSelect .mode-btn');
-      if (btn.classList.contains('active') && document.querySelectorAll('#modeSelect .mode-btn.active').length <= 1) return;
-      btn.classList.toggle('active');
+      const same = document.querySelectorAll(`[data-mode="${btn.dataset.mode}"]`);
+      const activeCount = document.querySelectorAll('#modeSelect .mode-btn.active').length;
+      if (btn.classList.contains('active') && activeCount <= 1) return;
+      const next = !btn.classList.contains('active');
+      same.forEach(b => b.classList.toggle('active', next));
       selectedModes = [];
-      allBtns.forEach(b => { if (b.classList.contains('active')) selectedModes.push(b.dataset.mode); });
+      document.querySelectorAll('#modeSelect .mode-btn.active').forEach(b => selectedModes.push(b.dataset.mode));
     });
   });
 
