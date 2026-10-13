@@ -69,7 +69,7 @@ const dbPriority = [
 let activePresetId = null;
 let activePresetMeta = null;         // { id, title, author, species, aliases }
 let presetAliases = {};              // id → common name override for active preset
-let cloudPresetsCache = [];          // last fetched preset list
+let checkedPresetIds = new Set();
 
 /** Tiny offline fallback if no JSON files load */
 const FALLBACK_SCI = [
@@ -438,6 +438,7 @@ function initSpeciesModal() {
   });
 
   document.getElementById('savePresetCloudBtn')?.addEventListener('click', () => savePresetToCloudflare(false));
+  document.getElementById('useCheckedPresetsBtn')?.addEventListener('click', useCheckedPresets);
   document.getElementById('updatePresetCloudBtn')?.addEventListener('click', () => savePresetToCloudflare(true));
   document.getElementById('addSpeciesBtn')?.addEventListener('click', addCustomSpecies);
   document.getElementById('presetCsvInput')?.addEventListener('change', importPresetFromCsv);
@@ -655,18 +656,26 @@ async function fetchCloudPresets() {
   }
 }
 
+function updatePresetPickCount() {
+  const note = document.getElementById("presetPickCount");
+  if (note) note.textContent = `${checkedPresetIds.size} of 20 selected`;
+}
+
 function renderCloudPresetList() {
   const list = document.getElementById("cloudPresetList");
   if (!list) return;
   if (!cloudPresetsCache.length) {
     list.innerHTML = '<div class="lb-loading">No presets yet — select species and Save as new</div>';
+    updatePresetPickCount();
     return;
   }
   list.innerHTML = "";
   cloudPresetsCache.forEach(p => {
     const row = document.createElement("div");
     row.className = "preset-row" + (p.id === activePresetId ? " active-preset" : "");
+    const checked = checkedPresetIds.has(p.id);
     row.innerHTML = `
+      <input type="checkbox" class="preset-check" ${checked ? "checked" : ""} aria-label="Select ${p.title || "preset"}">
       <div class="preset-row-info">
         <div class="preset-row-title">${p.title || "Untitled"}</div>
         <div class="preset-row-meta">${(p.species || []).length} spp · ${p.author || "Anon"}</div>
@@ -678,6 +687,16 @@ function renderCloudPresetList() {
         <button type="button" data-act="alias">Edit common names</button>
       </div>
     `;
+    row.querySelector(".preset-check").addEventListener("change", (e) => {
+      if (e.target.checked && checkedPresetIds.size >= 20) {
+        e.target.checked = false;
+        alert("You can choose up to 20 presets.");
+        return;
+      }
+      if (e.target.checked) checkedPresetIds.add(p.id);
+      else checkedPresetIds.delete(p.id);
+      updatePresetPickCount();
+    });
     const menuBtn = row.querySelector(".preset-menu-btn");
     const menu = row.querySelector(".preset-menu");
     menuBtn.addEventListener("click", (e) => {
@@ -699,6 +718,21 @@ function renderCloudPresetList() {
     });
     list.appendChild(row);
   });
+  updatePresetPickCount();
+}
+
+function useCheckedPresets() {
+  const picked = cloudPresetsCache.filter(p => checkedPresetIds.has(p.id)).slice(0, 20);
+  if (!picked.length) {
+    alert("Check at least one preset.");
+    return;
+  }
+  const ids = new Set();
+  picked.forEach(p => (p.species || []).forEach(id => ids.add(String(id))));
+  selectedIds = ids;
+  updatePickerUI();
+  syncActivePool();
+  alert(`Loaded ${picked.length} preset${picked.length === 1 ? "" : "s"} (${selectedIds.size} species).`);
 }
 
 function applyCloudPreset(p, forEdit) {
