@@ -1161,5 +1161,8 @@ body.lobster-font, body.lobster-font button, body.lobster-font input { font-fami
 
 .home-actions { display: flex; gap: 8px; }
 .home-modes { margin: 4px 0 16px; }
-.mode-btn { border-radius: 999px; }
+.mode-btn, .count-btn, .choice-btn, .option, .btn-main, .btn-guest, .btn-ultimate, .next-btn, .hint-btn {
+  border-radius: 999px;
+}
+#aliasModal, #aliasModalBackdrop { z-index: 500; }
 .brand h1 { letter-spacing: -0.02em; }
