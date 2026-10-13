@@ -57,7 +57,7 @@ body {
    -------------------------------------------------------------------------- */
 .app-container {
   width: 100%;
-  max-width: 480px;
+  max-width: 760px;
 }
 
 .card {
@@ -554,26 +554,22 @@ body {
 
 .settings-sidebar {
   position: fixed;
-  left: 0;
+  top: 0;
   right: 0;
-  bottom: 0;
-  top: auto;
-  width: min(480px, 100%);
-  margin: 0 auto;
-  height: 82vh;
+  width: min(380px, 100%);
+  height: 100vh;
   background: var(--card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px 16px 0 0;
+  border-left: 1px solid var(--border-subtle);
   z-index: 210;
   display: flex;
   flex-direction: column;
-  transform: translateY(110%);
-  transition: transform 0.25s ease;
+  transform: translateX(105%);
+  transition: transform 0.22s ease;
   pointer-events: none;
 }
 
 .settings-sidebar.open {
-  transform: translateY(0);
+  transform: translateX(0);
   pointer-events: auto;
 }
 
@@ -1162,3 +1158,8 @@ body.lobster-font, body.lobster-font button, body.lobster-font input { font-fami
 .options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .flash-extra, .range-map { margin: 8px 0; font-size: 0.82rem; color: var(--muted); }
 .range-map a { color: #a8e0c4; }
+
+.home-actions { display: flex; gap: 8px; }
+.home-modes { margin: 4px 0 16px; }
+.mode-btn { border-radius: 999px; }
+.brand h1 { letter-spacing: -0.02em; }
