@@ -1089,6 +1089,7 @@ function initExtraSettings() {
 const DEFAULT_KEYS = {
   answer1: "Digit1", answer2: "Digit2", answer3: "Digit3",
   answer4: "Digit4", answer5: "Digit5", answer6: "Digit6",
+  answer7: "Digit7", answer8: "Digit8",
   cluster1: "KeyU", cluster2: "KeyI", cluster3: "KeyJ",
   cluster4: "KeyK", cluster5: "KeyN", cluster6: "KeyM",
   next: "Enter", hint: "KeyH", settings: "KeyS", presets: "KeyP",
@@ -1097,6 +1098,7 @@ const DEFAULT_KEYS = {
 const KEY_LABELS = {
   answer1: "Pick answer 1", answer2: "Pick answer 2", answer3: "Pick answer 3",
   answer4: "Pick answer 4", answer5: "Pick answer 5", answer6: "Pick answer 6",
+  answer7: "Pick answer 7", answer8: "Pick answer 8",
   cluster1: "Pick answer 1 (letter pad)", cluster2: "Pick answer 2 (letter pad)",
   cluster3: "Pick answer 3 (letter pad)", cluster4: "Pick answer 4 (letter pad)",
   cluster5: "Pick answer 5 (letter pad)", cluster6: "Pick answer 6 (letter pad)",
@@ -1143,7 +1145,7 @@ function renderKeybindList() {
 function answerKeyTag(n) {
   const num = prettyKey(keybinds["answer" + n]);
   const letter = prettyKey(keybinds["cluster" + n]);
-  return `[${num}/${letter}]`;
+  return letter && letter !== "undefined" ? `[${num}/${letter}]` : `[${num}]`;
 }
 
 function stampKey(el, tag) {
