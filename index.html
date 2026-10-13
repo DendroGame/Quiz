@@ -286,9 +286,21 @@
           <h1>Dendrology Master</h1>
           <p class="subtitle" id="poolStatusSubtitle">Loading species database…</p>
         </div>
-        <div style="display:flex; gap:8px;">
-          <button type="button" id="openSpeciesModalBtn" class="btn-preset-open">🌲 Pick Species / Presets</button>
-          <button type="button" id="settingsBtn" class="btn-gear-head" title="Settings">⚙️ Settings</button>
+        <div class="home-actions">
+          <button type="button" id="openSpeciesModalBtn" class="btn-preset-open">Species / Presets</button>
+          <button type="button" id="settingsBtn" class="btn-gear-head" title="Settings">Settings</button>
+        </div>
+      </div>
+
+      <div class="set-row home-modes">
+        <span class="label">Mode</span>
+        <div class="mode-select" id="homeModeSelect">
+          <button type="button" class="mode-btn active" data-mode="sci-to-common">Scientific → Common</button>
+          <button type="button" class="mode-btn" data-mode="common-to-sci">Common → Scientific</button>
+          <button type="button" class="mode-btn" data-mode="family">Family</button>
+          <button type="button" class="mode-btn" data-mode="flash">Flash cards</button>
+          <button type="button" class="mode-btn" data-mode="identify">Identification</button>
+          <button type="button" class="mode-btn" data-mode="invasive">Invasive</button>
         </div>
       </div>
 
