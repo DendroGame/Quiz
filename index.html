@@ -191,6 +191,7 @@
     <div class="preset-footer">
       <div class="preset-list-panel">
         <span class="label">Cloud presets</span>
+        <p class="guest-notice" id="presetPickCount">0 of 20 selected</p>
         <div id="cloudPresetList" class="cloud-preset-list">
           <div class="lb-loading">Loading presets…</div>
         </div>
@@ -199,6 +200,7 @@
         <input type="text" id="presetTitleInput" placeholder="Preset name (e.g. Lab 4 Oaks)" maxlength="32">
         <input type="text" id="presetAuthorInput" placeholder="Your name" maxlength="20">
         <button type="button" id="savePresetCloudBtn" class="btn-primary">☁️ Save as new</button>
+        <button type="button" id="useCheckedPresetsBtn" class="btn-secondary">Use checked presets</button>
         <button type="button" id="updatePresetCloudBtn" class="btn-secondary hidden">💾 Update preset</button>
         <label class="btn-secondary" style="cursor:pointer;">CSV of common names
           <input type="file" id="presetCsvInput" accept=".csv,text/csv" hidden>
